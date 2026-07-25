@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -35,6 +35,93 @@ export default function LoginPage() {
   }
 
   return (
+    <div style={styles.formCard}>
+      <div style={styles.formHeader}>
+        <p style={styles.formEyebrow}>PORTAL AMIL ZAKAT</p>
+        <h2 style={styles.formTitle}>Masuk ke Dasbor</h2>
+        <p style={styles.formSubtitle}>
+          Hanya petugas amil yang berwenang yang dapat mengakses sistem ini.
+        </p>
+      </div>
+
+      <div style={styles.formBody}>
+        <div style={styles.fieldGroup}>
+          <label style={styles.label} htmlFor="email">Alamat Email</label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="amil@masjid.org"
+            style={styles.input}
+            onFocus={(e: React.FocusEvent<HTMLInputElement>) =>
+              Object.assign(e.target.style, styles.inputFocus)
+            }
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+              Object.assign(e.target.style, styles.input)
+            }
+            autoComplete="email"
+          />
+        </div>
+
+        <div style={styles.fieldGroup}>
+          <label style={styles.label} htmlFor="password">Kata Sandi</label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="••••••••"
+            style={styles.input}
+            onFocus={(e: React.FocusEvent<HTMLInputElement>) =>
+              Object.assign(e.target.style, styles.inputFocus)
+            }
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
+              Object.assign(e.target.style, styles.input)
+            }
+            autoComplete="current-password"
+          />
+        </div>
+
+        {error && (
+          <div style={styles.errorBox}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+              <circle cx="8" cy="8" r="7" stroke="#B91C1C" strokeWidth="1.5" />
+              <path d="M8 5v3.5M8 11h.01" stroke="#B91C1C" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            {error}
+          </div>
+        )}
+
+        <button
+          onClick={handleLogin}
+          disabled={loading}
+          style={loading ? { ...styles.button, ...styles.buttonDisabled } : styles.button}
+          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+            if (!loading) Object.assign(e.currentTarget.style, styles.buttonHover)
+          }}
+          onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+            if (!loading) Object.assign(e.currentTarget.style, styles.button)
+          }}
+        >
+          {loading ? (
+            <span style={styles.loadingRow}>
+              <span style={styles.spinner} />
+              Memverifikasi...
+            </span>
+          ) : 'Masuk'}
+        </button>
+      </div>
+
+      <p style={styles.footerNote}>Lupa akses? Hubungi administrator sistem Anda.</p>
+    </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
     <div style={styles.page}>
       {/* Left panel */}
       <div style={styles.leftPanel}>
@@ -44,8 +131,7 @@ export default function LoginPage() {
             <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
               <path
                 d="M24 4L28.5 14.5H39L30.5 21L34 32L24 25.5L14 32L17.5 21L9 14.5H19.5L24 4Z"
-                fill="white"
-                fillOpacity="0.9"
+                fill="white" fillOpacity="0.9"
               />
             </svg>
           </div>
@@ -62,7 +148,6 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-
         <p style={styles.ayatText}>
           &ldquo;Ambillah zakat dari sebagian harta mereka, dengan zakat itu kamu membersihkan
           dan mensucikan mereka.&rdquo;
@@ -70,92 +155,11 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Right panel */}
+      {/* Right panel — Suspense wajib karena LoginForm pakai useSearchParams */}
       <div style={styles.rightPanel}>
-        <div style={styles.formCard}>
-          <div style={styles.formHeader}>
-            <p style={styles.formEyebrow}>PORTAL AMIL ZAKAT</p>
-            <h2 style={styles.formTitle}>Masuk ke Dasbor</h2>
-            <p style={styles.formSubtitle}>
-              Hanya petugas amil yang berwenang yang dapat mengakses sistem ini.
-            </p>
-          </div>
-
-          <div style={styles.formBody}>
-            <div style={styles.fieldGroup}>
-              <label style={styles.label} htmlFor="email">Alamat Email</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="amil@masjid.org"
-                style={styles.input}
-                onFocus={(e: React.FocusEvent<HTMLInputElement>) =>
-                  Object.assign(e.target.style, styles.inputFocus)
-                }
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  Object.assign(e.target.style, styles.input)
-                }
-                autoComplete="email"
-              />
-            </div>
-
-            <div style={styles.fieldGroup}>
-              <label style={styles.label} htmlFor="password">Kata Sandi</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="••••••••"
-                style={styles.input}
-                onFocus={(e: React.FocusEvent<HTMLInputElement>) =>
-                  Object.assign(e.target.style, styles.inputFocus)
-                }
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) =>
-                  Object.assign(e.target.style, styles.input)
-                }
-                autoComplete="current-password"
-              />
-            </div>
-
-            {error && (
-              <div style={styles.errorBox}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                  <circle cx="8" cy="8" r="7" stroke="#B91C1C" strokeWidth="1.5" />
-                  <path d="M8 5v3.5M8 11h.01" stroke="#B91C1C" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-                {error}
-              </div>
-            )}
-
-            <button
-              onClick={handleLogin}
-              disabled={loading}
-              style={loading ? { ...styles.button, ...styles.buttonDisabled } : styles.button}
-              onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                if (!loading) Object.assign(e.currentTarget.style, styles.buttonHover)
-              }}
-              onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                if (!loading) Object.assign(e.currentTarget.style, styles.button)
-              }}
-            >
-              {loading ? (
-                <span style={styles.loadingRow}>
-                  <span style={styles.spinner} />
-                  Memverifikasi...
-                </span>
-              ) : (
-                'Masuk'
-              )}
-            </button>
-          </div>
-
-          <p style={styles.footerNote}>Lupa akses? Hubungi administrator sistem Anda.</p>
-        </div>
+        <Suspense fallback={<div style={styles.formCard} />}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   )
