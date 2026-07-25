@@ -1,13 +1,14 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
 
 interface Muzakki { id: number; nama: string }
 
-export default function TambahPage() {
+// 1. Ubah nama fungsi utama menjadi TambahContent (isi logika 100% milikmu)
+function TambahContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -135,7 +136,7 @@ export default function TambahPage() {
               </div>
               <div style={s.cardBody}>
                 {([
-                  { key: 'zakat-mal',    icon: '🏦', label: 'Zakat Mal',     desc: 'Zakat atas harta, dihitung otomatis dari nisab emas' },
+                  { key: 'zakat-mal',    icon: '🏦', label: 'Zakat Mal',    desc: 'Zakat atas harta, dihitung otomatis dari nisab emas' },
                   { key: 'zakat-fitrah', icon: '🌙', label: 'Zakat Fitrah',  desc: 'Zakat jiwa, standar Jabodetabek Rp 45.000 atau 2.5 Kg/jiwa' },
                   { key: 'infaq',        icon: '🤲', label: 'Infaq/Sedekah', desc: 'Sumbangan sukarela, nominal bebas' },
                 ] as const).map(item => (
@@ -194,6 +195,15 @@ export default function TambahPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// 2. Eksport utama dibungkus Suspense di paling bawah
+export default function TambahPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>
+      <TambahContent />
+    </Suspense>
   )
 }
 
