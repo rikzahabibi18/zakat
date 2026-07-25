@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
@@ -18,7 +18,7 @@ function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
 
-export default function ZakatFitrahPage() {
+function ZakatFitrahContent() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
@@ -254,6 +254,14 @@ export default function ZakatFitrahPage() {
   )
 }
 
+export default function ZakatFitrahPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>
+      <ZakatFitrahContent />
+    </Suspense>
+  )
+}
+
 const s: Record<string, React.CSSProperties> = {
   shell: { display: 'flex', minHeight: '100vh', background: '#F8F4ED', fontFamily: "'Plus Jakarta Sans', sans-serif" },
   main: { marginLeft: '220px', flex: 1, padding: '32px 36px' },
@@ -284,7 +292,7 @@ const s: Record<string, React.CSSProperties> = {
   hasilDivider: { width: '1px', background: '#C9E8D5', margin: '0 16px' },
   hasilItemLabel: { fontSize: '11px', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.3px' },
   hasilItemValue: { fontSize: '18px', fontWeight: 700, color: '#2D7A50' },
-  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
+  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', borderRadius: '10px', borderStyle: 'solid', borderWidth: '2px', borderColor: '#EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
   metodeBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
   metodeIcon: { fontSize: '22px', flexShrink: 0 },
   metodeText: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' },

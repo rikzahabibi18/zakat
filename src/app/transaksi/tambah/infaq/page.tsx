@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
@@ -21,7 +21,8 @@ function formatInput(val: string) {
 }
 function parseInput(val: string) { return Number(val.replace(/\D/g, '')) }
 
-export default function InfaqPage() {
+// 1. Pindahkan isi utama halaman ke komponen terpisah ini:
+function InfaqContent() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
@@ -226,6 +227,15 @@ export default function InfaqPage() {
         />
       )}
     </div>
+  )
+}
+
+// 2. Eksport utama Halaman yang dibungkus oleh Suspense
+export default function InfaqPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>
+      <InfaqContent />
+    </Suspense>
   )
 }
 

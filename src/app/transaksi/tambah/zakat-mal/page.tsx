@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
@@ -35,7 +35,8 @@ function parseInput(val: string) {
   return Number(val.replace(/\D/g, ''))
 }
 
-export default function ZakatMalPage() {
+// 1. Komponen konten asli kamu (tidak ada logika/style yang diubah)
+function ZakatMalContent() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
@@ -346,6 +347,15 @@ export default function ZakatMalPage() {
         />
       )}
     </div>
+  )
+}
+
+// 2. Cukup menambahkan ini di eksport utamanya:
+export default function ZakatMalPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>
+      <ZakatMalContent />
+    </Suspense>
   )
 }
 
