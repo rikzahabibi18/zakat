@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState, Suspense } from 'react'
+import React, { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
@@ -8,6 +8,7 @@ import QRConfirmModal from '@/components/QRConfirmModal'
 
 type Metode = 'Tunai' | 'Transfer Bank' | 'QRIS'
 type Step = 'kalkulasi' | 'metode' | 'konfirmasi'
+type OpsiKalkulasi = 'hitung' | 'langsung'
 
 const METODE_LIST: Metode[] = ['Tunai', 'Transfer Bank', 'QRIS']
 const METODE_ICON: Record<Metode, string> = { Tunai: '💵', 'Transfer Bank': '🏦', QRIS: '📱' }
@@ -23,19 +24,14 @@ interface GoldData {
 }
 
 function formatRupiah(n: number) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency', currency: 'IDR', maximumFractionDigits: 0,
-  }).format(n)
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
 function formatInput(val: string) {
   const digits = val.replace(/\D/g, '')
   return digits ? Number(digits).toLocaleString('id-ID') : ''
 }
-function parseInput(val: string) {
-  return Number(val.replace(/\D/g, ''))
-}
+function parseInput(val: string) { return Number(val.replace(/\D/g, '')) }
 
-// 1. Komponen konten asli kamu (tidak ada logika/style yang diubah)
 function ZakatMalContent() {
   const router = useRouter()
   const params = useSearchParams()
@@ -45,18 +41,25 @@ function ZakatMalContent() {
   const muzakkiNama = params.get('muzakkiNama') ?? ''
 
   const [step, setStep] = useState<Step>('kalkulasi')
+  const [opsi, setOpsi] = useState<OpsiKalkulasi>('hitung')
   const [gold, setGold] = useState<GoldData>({
     hargaPerGram: 0, nisab: 0, sumber: '', tanggal: '', loading: true, error: '',
   })
   const [totalHarta, setTotalHarta] = useState('')
+  const [nominalLangsung, setNominalLangsung] = useState('')
   const [metode, setMetode] = useState<Metode | null>(null)
   const [stepError, setStepError] = useState('')
   const [saving, setSaving] = useState(false)
   const [qrData, setQrData] = useState<{ id: number; nominal: string } | null>(null)
 
   const hartaNum = parseInput(totalHarta)
-  const zakatNominal = Math.ceil(hartaNum * 0.025)
+  const zakatDariHarta = Math.ceil(hartaNum * 0.025)
+  const nominalLangsungNum = parseInput(nominalLangsung)
   const wajib = hartaNum >= gold.nisab && gold.nisab > 0
+
+  // Nominal final yang akan disimpan
+  const nominalFinal = opsi === 'hitung' ? zakatDariHarta : nominalLangsungNum
+
   const stepIndex = STEP_ORDER.indexOf(step)
   const progress = Math.round(((stepIndex + 1) / STEP_ORDER.length) * 100)
 
@@ -67,30 +70,15 @@ function ZakatMalContent() {
         const res = await fetch('/api/harga-emas')
         if (!res.ok) throw new Error('Response tidak OK')
         const json = await res.json()
-
-        if (!json.success || !Array.isArray(json.data)) {
-          throw new Error('Format response tidak sesuai')
-        }
-
+        if (!json.success || !Array.isArray(json.data)) throw new Error('Format response tidak sesuai')
         const entry = json.data.find(
           (d: { material: string; materialType: string; weight: number; sellPrice: number }) =>
-            d.material === 'gold' &&
-            d.materialType === 'Emas Batangan' &&
-            d.weight === 1 &&
-            d.sellPrice > 0
+            d.material === 'gold' && d.materialType === 'Emas Batangan' &&
+            d.weight === 1 && d.sellPrice > 0
         )
-
         if (!entry) throw new Error('Data emas 1 gram tidak ditemukan')
-
         const hargaPerGram: number = entry.sellPrice
-        setGold({
-          hargaPerGram,
-          nisab: hargaPerGram * 85,
-          sumber: entry.displayName ?? 'Logam Mulia',
-          tanggal: entry.recordedDate ?? '',
-          loading: false,
-          error: '',
-        })
+        setGold({ hargaPerGram, nisab: hargaPerGram * 85, sumber: entry.displayName ?? 'Logam Mulia', tanggal: entry.recordedDate ?? '', loading: false, error: '' })
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Gagal mengambil data'
         setGold(g => ({ ...g, loading: false, error: `Gagal mengambil harga emas: ${msg}` }))
@@ -99,16 +87,24 @@ function ZakatMalContent() {
     fetchGold()
   }, [])
 
+  // Reset input saat ganti opsi
+  useEffect(() => {
+    setTotalHarta('')
+    setNominalLangsung('')
+    setStepError('')
+  }, [opsi])
+
   function handleNext() {
     if (step === 'kalkulasi') {
-      if (!totalHarta) { setStepError('Masukkan total harta.'); return }
-      if (gold.nisab > 0 && !wajib) {
-        setStepError(`Harta belum mencapai nisab ${formatRupiah(gold.nisab)}.`); return
+      if (opsi === 'hitung') {
+        if (!totalHarta) { setStepError('Masukkan total harta.'); return }
+        if (gold.nisab > 0 && !wajib) { setStepError(`Harta belum mencapai nisab ${formatRupiah(gold.nisab)}.`); return }
+      }
+      if (opsi === 'langsung') {
+        if (!nominalLangsung || nominalLangsungNum < 1) { setStepError('Masukkan nominal zakat.'); return }
       }
     }
-    if (step === 'metode') {
-      if (!metode) { setStepError('Pilih metode pembayaran.'); return }
-    }
+    if (step === 'metode' && !metode) { setStepError('Pilih metode pembayaran.'); return }
     setStepError('')
     setStep(STEP_ORDER[stepIndex + 1])
   }
@@ -116,9 +112,7 @@ function ZakatMalContent() {
   function handleBack() {
     setStepError('')
     if (stepIndex === 0) {
-      router.push(
-        `/transaksi/tambah?muzakkiId=${muzakkiId}&muzakkiNama=${encodeURIComponent(muzakkiNama)}&step=2`
-      )
+      router.push(`/transaksi/tambah?muzakkiId=${muzakkiId}&muzakkiNama=${encodeURIComponent(muzakkiNama)}&step=2`)
       return
     }
     setStep(STEP_ORDER[stepIndex - 1])
@@ -127,27 +121,23 @@ function ZakatMalContent() {
   async function handleSave() {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: profil } = await supabase
-      .from('profil_amil')
-      .select('lembaga_id')
-      .eq('id', user!.id)
-      .single()
-    const { data: kategori } = await supabase
-      .from('kategori_zakat').select('id').eq('nama_kategori', 'Zakat Mal').single()
+    const { data: profil } = await supabase.from('profil_amil').select('lembaga_id').eq('id', user!.id).single()
+    const { data: kategori } = await supabase.from('kategori_zakat').select('id').eq('nama_kategori', 'Zakat Mal').single()
 
     const { data, error } = await supabase.from('transaksi').insert({
       muzakki_id: Number(muzakkiId),
       kategori_id: kategori?.id ?? null,
       metode_pembayaran: metode,
-      jumlah_uang: zakatNominal,
+      jumlah_uang: nominalFinal,
       jumlah_beras: 0,
       amil_pencatat: user?.user_metadata?.nama ?? user?.email ?? null,
       lembaga_id: profil?.lembaga_id ?? null,
     }).select('id')
+
     setSaving(false)
     if (error) { setStepError('Gagal menyimpan. Coba lagi.'); return }
     if (metode === 'QRIS' && data) {
-      setQrData({ id: (data as { id: number }[])[0]?.id ?? 0, nominal: formatRupiah(zakatNominal) })
+      setQrData({ id: (data as { id: number }[])[0]?.id ?? 0, nominal: formatRupiah(nominalFinal) })
     } else {
       router.push('/transaksi')
     }
@@ -157,7 +147,6 @@ function ZakatMalContent() {
     <div style={s.shell}>
       <Sidebar />
       <main style={s.main}>
-
         <div style={s.header}>
           <div>
             <h1 style={s.headerTitle}>Zakat Mal</h1>
@@ -176,13 +165,40 @@ function ZakatMalContent() {
 
         <div style={s.formWrap}>
 
+          {/* ── Step: Kalkulasi ── */}
           {step === 'kalkulasi' && (
             <div style={s.card}>
               <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Kalkulasi Nisab</h2>
-                <p style={s.cardSub}>Nisab dihitung dari harga emas Antam 85 gram (realtime)</p>
+                <h2 style={s.cardTitle}>Kalkulasi Zakat Mal</h2>
+                <p style={s.cardSub}>Pilih cara penghitungan zakat</p>
               </div>
               <div style={s.cardBody}>
+
+                {/* Toggle opsi */}
+                <div style={s.opsiToggle}>
+                  <button
+                    onClick={() => setOpsi('hitung')}
+                    style={{ ...s.opsiBtn, ...(opsi === 'hitung' ? s.opsiBtnActive : {}) }}
+                  >
+                    <span style={s.opsiIcon}>🏦</span>
+                    <div>
+                      <p style={s.opsiLabel}>Hitung dari Harta</p>
+                      <p style={s.opsiDesc}>Input total harta, sistem hitung 2.5%</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setOpsi('langsung')}
+                    style={{ ...s.opsiBtn, ...(opsi === 'langsung' ? s.opsiBtnActive : {}) }}
+                  >
+                    <span style={s.opsiIcon}>✏️</span>
+                    <div>
+                      <p style={s.opsiLabel}>Input Nominal Langsung</p>
+                      <p style={s.opsiDesc}>Muzakki sudah tahu nominalnya</p>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Info harga emas — tampil di kedua opsi */}
                 <div style={s.infoBox}>
                   {gold.loading ? (
                     <div style={s.loadingRow}>
@@ -200,73 +216,90 @@ function ZakatMalContent() {
                         </div>
                         <div>
                           <p style={s.goldLabel}>Nisab (85 gram)</p>
-                          <p style={{ ...s.goldValue, color: '#1A4731' }}>
-                            {formatRupiah(gold.nisab)}
-                          </p>
+                          <p style={{ ...s.goldValue, color: '#1A4731' }}>{formatRupiah(gold.nisab)}</p>
                         </div>
                       </div>
-                      <p style={s.goldMeta}>
-                        Sumber: {gold.sumber}
-                        {gold.tanggal && ` · ${gold.tanggal}`}
-                      </p>
+                      <p style={s.goldMeta}>Sumber: {gold.sumber}{gold.tanggal && ` · ${gold.tanggal}`}</p>
                     </>
                   )}
                 </div>
 
-                <div style={s.field}>
-                  <label style={s.label}>Total Harta Muzakki (Rp)</label>
-                  <div style={s.inputWrap}>
-                    <span style={s.prefix}>Rp</span>
-                    <input
-                      type="text" inputMode="numeric" placeholder="0"
-                      value={totalHarta}
-                      onChange={e => setTotalHarta(formatInput(e.target.value))}
-                      style={{ ...s.input, paddingLeft: '44px' }}
-                      disabled={gold.loading}
-                    />
-                  </div>
-                </div>
+                {/* Opsi A — Hitung dari harta */}
+                {opsi === 'hitung' && (
+                  <>
+                    <div style={s.field}>
+                      <label style={s.label}>Total Harta Muzakki (Rp)</label>
+                      <div style={s.inputWrap}>
+                        <span style={s.prefix}>Rp</span>
+                        <input type="text" inputMode="numeric" placeholder="0"
+                          value={totalHarta}
+                          onChange={e => setTotalHarta(formatInput(e.target.value))}
+                          style={{ ...s.input, paddingLeft: '44px' }}
+                          disabled={gold.loading} />
+                      </div>
+                    </div>
 
-                {totalHarta && gold.nisab > 0 && (
-                  <div style={{
-                    ...s.hasilBox,
-                    background: wajib ? '#F0F7F3' : '#FEF2F2',
-                    borderColor: wajib ? '#2D7A50' : '#FECACA',
-                  }}>
-                    {wajib ? (
-                      <>
-                        <p style={s.hasilStatus}>✅ Wajib Zakat Mal</p>
-                        <p style={s.hasilDesc}>Total harta telah mencapai nisab</p>
-                        <div style={s.hasilRow}>
-                          <span style={s.hasilRowLabel}>Zakat yang harus dibayar (2.5%)</span>
-                          <span style={s.hasilRowValue}>{formatRupiah(zakatNominal)}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p style={{ ...s.hasilStatus, color: '#B91C1C' }}>❌ Belum Wajib Zakat</p>
-                        <p style={s.hasilDesc}>
-                          Harta belum mencapai nisab {formatRupiah(gold.nisab)}
-                        </p>
-                        <div style={s.hasilRow}>
-                          <span style={s.hasilRowLabel}>Kekurangan</span>
-                          <span style={{ ...s.hasilRowValue, color: '#B91C1C' }}>
-                            {formatRupiah(gold.nisab - hartaNum)}
-                          </span>
-                        </div>
-                      </>
+                    {totalHarta && gold.nisab > 0 && (
+                      <div style={{ ...s.hasilBox, background: wajib ? '#F0F7F3' : '#FEF2F2', borderColor: wajib ? '#2D7A50' : '#FECACA' }}>
+                        {wajib ? (
+                          <>
+                            <p style={s.hasilStatus}>✅ Wajib Zakat Mal</p>
+                            <p style={s.hasilDesc}>Total harta telah mencapai nisab</p>
+                            <div style={s.hasilRow}>
+                              <span style={s.hasilRowLabel}>Zakat yang harus dibayar (2.5%)</span>
+                              <span style={s.hasilRowValue}>{formatRupiah(zakatDariHarta)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p style={{ ...s.hasilStatus, color: '#B91C1C' }}>❌ Belum Wajib Zakat</p>
+                            <p style={s.hasilDesc}>Harta belum mencapai nisab {formatRupiah(gold.nisab)}</p>
+                            <div style={s.hasilRow}>
+                              <span style={s.hasilRowLabel}>Kekurangan</span>
+                              <span style={{ ...s.hasilRowValue, color: '#B91C1C' }}>{formatRupiah(gold.nisab - hartaNum)}</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
-                  </div>
+                  </>
+                )}
+
+                {/* Opsi B — Input nominal langsung */}
+                {opsi === 'langsung' && (
+                  <>
+                    <div style={s.field}>
+                      <label style={s.label}>Nominal Zakat (Rp)</label>
+                      <div style={s.inputWrap}>
+                        <span style={s.prefix}>Rp</span>
+                        <input type="text" inputMode="numeric" placeholder="0"
+                          value={nominalLangsung}
+                          onChange={e => setNominalLangsung(formatInput(e.target.value))}
+                          style={{ ...s.input, paddingLeft: '44px' }}
+                          autoFocus />
+                      </div>
+                    </div>
+                    {nominalLangsung && nominalLangsungNum > 0 && (
+                      <div style={{ ...s.hasilBox, background: '#F0F7F3', borderColor: '#2D7A50' }}>
+                        <p style={s.hasilStatus}>📝 Nominal yang akan dicatat</p>
+                        <div style={s.hasilRow}>
+                          <span style={s.hasilRowLabel}>Zakat Mal</span>
+                          <span style={s.hasilRowValue}>{formatRupiah(nominalLangsungNum)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
           )}
 
+          {/* ── Step: Metode ── */}
           {step === 'metode' && (
             <div style={s.card}>
               <div style={s.cardHeader}>
                 <h2 style={s.cardTitle}>Metode Pembayaran</h2>
-                <p style={s.cardSub}>Zakat Mal: <strong>{formatRupiah(zakatNominal)}</strong></p>
+                <p style={s.cardSub}>Zakat Mal: <strong>{formatRupiah(nominalFinal)}</strong></p>
               </div>
               <div style={s.cardBody}>
                 {METODE_LIST.map(m => (
@@ -281,6 +314,7 @@ function ZakatMalContent() {
             </div>
           )}
 
+          {/* ── Step: Konfirmasi ── */}
           {step === 'konfirmasi' && metode && (
             <div style={s.card}>
               <div style={s.cardHeader}>
@@ -292,8 +326,8 @@ function ZakatMalContent() {
                   {[
                     { label: 'Muzakki',     value: muzakkiNama },
                     { label: 'Jenis Zakat', value: 'Zakat Mal' },
-                    { label: 'Total Harta', value: formatRupiah(hartaNum) },
-                    { label: 'Nisab',       value: formatRupiah(gold.nisab) },
+                    { label: 'Cara Hitung', value: opsi === 'hitung' ? 'Dari Total Harta' : 'Nominal Langsung' },
+                    ...(opsi === 'hitung' ? [{ label: 'Total Harta', value: formatRupiah(hartaNum) }] : []),
                     { label: 'Metode',      value: `${METODE_ICON[metode]} ${metode}` },
                   ].map(r => (
                     <div key={r.label} style={s.konfRow}>
@@ -302,9 +336,9 @@ function ZakatMalContent() {
                     </div>
                   ))}
                   <div style={{ ...s.konfRow, borderBottom: 'none' }}>
-                    <span style={s.konfLabel}>Zakat (2.5%)</span>
+                    <span style={s.konfLabel}>Nominal Zakat</span>
                     <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: '20px' }}>
-                      {formatRupiah(zakatNominal)}
+                      {formatRupiah(nominalFinal)}
                     </span>
                   </div>
                 </div>
@@ -319,9 +353,7 @@ function ZakatMalContent() {
             </div>
           )}
 
-          {stepError && step !== 'konfirmasi' && (
-            <div style={s.errorBox}>⚠ {stepError}</div>
-          )}
+          {stepError && step !== 'konfirmasi' && <div style={s.errorBox}>⚠ {stepError}</div>}
 
           {step !== 'konfirmasi' && (
             <div style={s.navRow}>
@@ -334,7 +366,6 @@ function ZakatMalContent() {
           {step === 'konfirmasi' && (
             <button onClick={handleBack} style={s.navBackBtn}>← Kembali</button>
           )}
-
         </div>
       </main>
 
@@ -350,7 +381,6 @@ function ZakatMalContent() {
   )
 }
 
-// 2. Cukup menambahkan ini di eksport utamanya:
 export default function ZakatMalPage() {
   return (
     <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>
@@ -375,6 +405,12 @@ const s: Record<string, React.CSSProperties> = {
   cardTitle: { fontSize: '17px', fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
   cardSub: { fontSize: '13px', color: '#A8A29E', marginBottom: '20px' },
   cardBody: { padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: '14px' },
+  opsiToggle: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+  opsiBtn: { display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'all 0.15s' },
+  opsiBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
+  opsiIcon: { fontSize: '20px', flexShrink: 0, marginTop: '2px' },
+  opsiLabel: { fontSize: '13px', fontWeight: 700, color: '#1C1917', marginBottom: '2px' },
+  opsiDesc: { fontSize: '11px', color: '#78716C' },
   infoBox: { background: '#F8F4ED', borderRadius: '10px', padding: '14px', border: '1px solid #EDE8E0' },
   loadingRow: { display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center', padding: '4px 0' },
   spinner: { width: '16px', height: '16px', border: '2px solid #EDE8E0', borderTop: '2px solid #2D7A50', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 },
