@@ -110,8 +110,8 @@ Buka [http://localhost:3000/login](http://localhost:3000/login)
 
 - [x] Halaman login amil
 - [x] Sidebar navigasi
-- [ ] Dashboard: total zakat mal, fitrah (uang + beras), infaq
-- [ ] Form input transaksi cepat
-- [ ] Riwayat transaksi dengan filter
-- [ ] Manajemen data muzakki
-- [ ] Export laporan (PDF/Excel)
+- [x] Dashboard: total zakat mal, fitrah (uang + beras), infaq
+- [x] Form input transaksi cepat
+- [x] Riwayat transaksi dengan filter
+- [x] Manajemen data muzakki
+- [x] Export laporan (PDF/Excel)
