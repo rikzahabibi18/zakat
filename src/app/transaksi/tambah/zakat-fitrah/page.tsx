@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
@@ -19,7 +19,7 @@ function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
 
-export default function ZakatFitrahPage() {
+function ZakatFitrahForm() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
@@ -66,12 +66,8 @@ export default function ZakatFitrahPage() {
   async function handleSave() {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-
     const { data: profil } = await supabase
-      .from('profil_amil')
-      .select('lembaga_id')
-      .eq('id', user!.id)
-      .single()
+      .from('profil_amil').select('lembaga_id').eq('id', user!.id).single()
 
     const namaKategori = metode === 'Beras' ? 'Zakat Fitrah - Beras' : 'Zakat Fitrah - Uang'
     const { data: kategori } = await supabase
@@ -89,22 +85,13 @@ export default function ZakatFitrahPage() {
 
     setSaving(false)
     if (error) { setStepError('Gagal menyimpan. Coba lagi.'); return }
+
     const insertedId = (data as { id: number }[])[0]?.id ?? 0
     const tanggalNow = new Date().toISOString()
     if (metode === 'QRIS') {
-      setQrData({ id: insertedId, nominal: '' })
+      setQrData({ id: insertedId, nominal: formatRupiah(totalUang) })
     } else {
       setStruk({ id: insertedId, tanggal: tanggalNow })
-    }
-    return
-
-    if (metode === 'QRIS' && data) {
-      setQrData({
-        id: (data as { id: number }[])[0]?.id ?? 0,
-        nominal: formatRupiah(totalUang),
-      })
-    } else {
-      router.push('/transaksi')
     }
   }
 
@@ -260,7 +247,32 @@ export default function ZakatFitrahPage() {
           onClose={() => router.push('/transaksi')}
         />
       )}
+
+      {struk && metode && (
+        <StrukModal
+          data={{
+            transaksiId: struk.id,
+            tanggal: struk.tanggal,
+            muzakkiNama,
+            jenisZakat: 'Zakat Fitrah',
+            metode,
+            jumlahUang: metode === 'Beras' ? 0 : totalUang,
+            jumlahBeras: metode === 'Beras' ? totalBeras : 0,
+            amilPencatat: '',
+          }}
+          onClose={() => setStruk(null)}
+          onRedirect={() => router.push('/transaksi')}
+        />
+      )}
     </div>
+  )
+}
+
+export default function ZakatFitrahPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>
+      <ZakatFitrahForm />
+    </Suspense>
   )
 }
 
