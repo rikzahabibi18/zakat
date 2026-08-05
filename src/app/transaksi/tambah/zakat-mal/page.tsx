@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
 import QRConfirmModal from '@/components/QRConfirmModal'
+import StrukModal from '@/components/StrukModal'
 
 type Metode = 'Tunai' | 'Transfer Bank' | 'QRIS'
 type Step = 'kalkulasi' | 'metode' | 'konfirmasi'
@@ -51,6 +52,7 @@ function ZakatMalContent() {
   const [stepError, setStepError] = useState('')
   const [saving, setSaving] = useState(false)
   const [qrData, setQrData] = useState<{ id: number; nominal: string } | null>(null)
+  const [struk, setStruk] = useState<{ id: number; tanggal: string } | null>(null)
 
   const hartaNum = parseInput(totalHarta)
   const zakatDariHarta = Math.ceil(hartaNum * 0.025)
@@ -136,11 +138,15 @@ function ZakatMalContent() {
 
     setSaving(false)
     if (error) { setStepError('Gagal menyimpan. Coba lagi.'); return }
-    if (metode === 'QRIS' && data) {
-      setQrData({ id: (data as { id: number }[])[0]?.id ?? 0, nominal: formatRupiah(nominalFinal) })
+    const insertedId = (data as { id: number }[])[0]?.id ?? 0
+    const tanggalNow = new Date().toISOString()
+    if (metode === 'QRIS') {
+      setQrData({ id: insertedId, nominal: '' })
     } else {
-      router.push('/transaksi')
+      setStruk({ id: insertedId, tanggal: tanggalNow })
     }
+    return
+
   }
 
   return (
@@ -375,6 +381,22 @@ function ZakatMalContent() {
           muzakkiNama={muzakkiNama}
           nominal={qrData.nominal}
           onClose={() => router.push('/transaksi')}
+        />
+      )}
+      {struk && metode && (
+        <StrukModal
+          data={{
+            transaksiId: struk.id,
+            tanggal: struk.tanggal,
+            muzakkiNama: muzakkiNama,
+            jenisZakat: 'Zakat Mal',
+            metode: metode,
+            jumlahUang: nominalFinal,
+            jumlahBeras: 0,
+            amilPencatat: '',
+          }}
+          onClose={() => setStruk(null)}
+          onRedirect={() => router.push('/transaksi')}
         />
       )}
     </div>

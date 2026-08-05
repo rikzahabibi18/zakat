@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState, Suspense } from 'react'
+import React, { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
 import QRConfirmModal from '@/components/QRConfirmModal'
+import StrukModal from '@/components/StrukModal'
 
 type Metode = 'Tunai' | 'Transfer Bank' | 'QRIS'
 type Step = 'nominal' | 'metode' | 'konfirmasi'
@@ -21,8 +22,7 @@ function formatInput(val: string) {
 }
 function parseInput(val: string) { return Number(val.replace(/\D/g, '')) }
 
-// 1. Pindahkan isi utama halaman ke komponen terpisah ini:
-function InfaqContent() {
+function InfaqForm() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
@@ -36,9 +36,9 @@ function InfaqContent() {
   const [stepError, setStepError] = useState('')
   const [saving, setSaving] = useState(false)
   const [qrData, setQrData] = useState<{ id: number; nominal: string } | null>(null)
+  const [struk, setStruk] = useState<{ id: number; tanggal: string } | null>(null)
 
   const nominalNum = parseInput(nominal)
-
   const STEP_ORDER: Step[] = ['nominal', 'metode', 'konfirmasi']
   const stepIndex = STEP_ORDER.indexOf(step)
   const progress = Math.round(((stepIndex + 1) / STEP_ORDER.length) * 100)
@@ -66,13 +66,8 @@ function InfaqContent() {
   async function handleSave() {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-
     const { data: profil } = await supabase
-      .from('profil_amil')
-      .select('lembaga_id')
-      .eq('id', user!.id)
-      .single()
-
+      .from('profil_amil').select('lembaga_id').eq('id', user!.id).single()
     const { data: kategori } = await supabase
       .from('kategori_zakat').select('id').eq('nama_kategori', 'Infaq/Sedekah').single()
 
@@ -88,15 +83,15 @@ function InfaqContent() {
 
     setSaving(false)
     if (error) { setStepError('Gagal menyimpan. Coba lagi.'); return }
-
-    if (metode === 'QRIS' && data) {
-      setQrData({
-        id: (data as { id: number }[])[0]?.id ?? 0,
-        nominal: formatRupiah(nominalNum),
-      })
+    const insertedId = (data as { id: number }[])[0]?.id ?? 0
+    const tanggalNow = new Date().toISOString()
+    if (metode === 'QRIS') {
+      setQrData({ id: insertedId, nominal: '' })
     } else {
-      router.push('/transaksi')
+      setStruk({ id: insertedId, tanggal: tanggalNow })
     }
+    return
+
   }
 
   return (
@@ -118,8 +113,6 @@ function InfaqContent() {
         </div>
 
         <div style={s.formWrap}>
-
-          {/* Nominal */}
           {step === 'nominal' && (
             <div style={s.card}>
               <div style={s.cardHeader}>
@@ -148,7 +141,6 @@ function InfaqContent() {
             </div>
           )}
 
-          {/* Metode */}
           {step === 'metode' && (
             <div style={s.card}>
               <div style={s.cardHeader}>
@@ -168,7 +160,6 @@ function InfaqContent() {
             </div>
           )}
 
-          {/* Konfirmasi */}
           {step === 'konfirmasi' && metode && (
             <div style={s.card}>
               <div style={s.cardHeader}>
@@ -189,9 +180,7 @@ function InfaqContent() {
                   ))}
                   <div style={{ ...s.konfRow, borderBottom: 'none' }}>
                     <span style={s.konfLabel}>Nominal</span>
-                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: '18px' }}>
-                      {formatRupiah(nominalNum)}
-                    </span>
+                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: '18px' }}>{formatRupiah(nominalNum)}</span>
                   </div>
                 </div>
                 <button onClick={handleSave} disabled={saving}
@@ -226,15 +215,30 @@ function InfaqContent() {
           onClose={() => router.push('/transaksi')}
         />
       )}
+      {struk && metode && (
+        <StrukModal
+          data={{
+            transaksiId: struk.id,
+            tanggal: struk.tanggal,
+            muzakkiNama: muzakkiNama,
+            jenisZakat: 'Infaq / Sedekah',
+            metode: metode,
+            jumlahUang: nominalNum,
+            jumlahBeras: 0,
+            amilPencatat: '',
+          }}
+          onClose={() => setStruk(null)}
+          onRedirect={() => router.push('/transaksi')}
+        />
+      )}
     </div>
   )
 }
 
-// 2. Eksport utama Halaman yang dibungkus oleh Suspense
 export default function InfaqPage() {
   return (
-    <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>
-      <InfaqContent />
+    <Suspense>
+      <InfaqForm />
     </Suspense>
   )
 }

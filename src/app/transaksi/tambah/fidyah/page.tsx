@@ -1,25 +1,24 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
 import QRConfirmModal from '@/components/QRConfirmModal'
 import StrukModal from '@/components/StrukModal'
 
-type Metode = 'Tunai' | 'Transfer Bank' | 'QRIS' | 'Beras'
+type Metode = 'Tunai' | 'Transfer Bank' | 'QRIS'
 type Step = 'kalkulasi' | 'metode' | 'konfirmasi'
 
-const METODE_LIST: Metode[] = ['Tunai', 'Transfer Bank', 'QRIS', 'Beras']
-const METODE_ICON: Record<Metode, string> = { Tunai: '💵', 'Transfer Bank': '🏦', QRIS: '📱', Beras: '🌾' }
-const FITRAH_UANG = 45000
-const FITRAH_BERAS = 2.5
+const METODE_LIST: Metode[] = ['Tunai', 'Transfer Bank', 'QRIS']
+const METODE_ICON: Record<Metode, string> = { Tunai: '💵', 'Transfer Bank': '🏦', QRIS: '📱' }
+const FIDYAH_PER_HARI = 65000
 
 function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
 
-export default function ZakatFitrahPage() {
+function FidyahForm() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
@@ -28,16 +27,15 @@ export default function ZakatFitrahPage() {
   const muzakkiNama = params.get('muzakkiNama') ?? ''
 
   const [step, setStep] = useState<Step>('kalkulasi')
-  const [jumlahJiwa, setJumlahJiwa] = useState('')
+  const [jumlahHari, setJumlahHari] = useState('')
   const [metode, setMetode] = useState<Metode | null>(null)
   const [stepError, setStepError] = useState('')
   const [saving, setSaving] = useState(false)
   const [qrData, setQrData] = useState<{ id: number; nominal: string } | null>(null)
   const [struk, setStruk] = useState<{ id: number; tanggal: string } | null>(null)
 
-  const jiwaNum = Number(jumlahJiwa)
-  const totalUang = jiwaNum * FITRAH_UANG
-  const totalBeras = jiwaNum * FITRAH_BERAS
+  const hariNum = Number(jumlahHari)
+  const totalFidyah = hariNum * FIDYAH_PER_HARI
 
   const STEP_ORDER: Step[] = ['kalkulasi', 'metode', 'konfirmasi']
   const stepIndex = STEP_ORDER.indexOf(step)
@@ -45,7 +43,7 @@ export default function ZakatFitrahPage() {
 
   function handleNext() {
     if (step === 'kalkulasi') {
-      if (!jumlahJiwa || jiwaNum < 1) { setStepError('Masukkan jumlah jiwa (minimal 1).'); return }
+      if (!jumlahHari || hariNum < 1) { setStepError('Masukkan jumlah hari (minimal 1).'); return }
     }
     if (step === 'metode') {
       if (!metode) { setStepError('Pilih metode pembayaran.'); return }
@@ -66,45 +64,30 @@ export default function ZakatFitrahPage() {
   async function handleSave() {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-
     const { data: profil } = await supabase
-      .from('profil_amil')
-      .select('lembaga_id')
-      .eq('id', user!.id)
-      .single()
-
-    const namaKategori = metode === 'Beras' ? 'Zakat Fitrah - Beras' : 'Zakat Fitrah - Uang'
+      .from('profil_amil').select('lembaga_id').eq('id', user!.id).single()
     const { data: kategori } = await supabase
-      .from('kategori_zakat').select('id').eq('nama_kategori', namaKategori).single()
+      .from('kategori_zakat').select('id').eq('nama_kategori', 'Fidyah').single()
 
     const { data, error } = await supabase.from('transaksi').insert({
       muzakki_id: Number(muzakkiId),
       kategori_id: kategori?.id ?? null,
       metode_pembayaran: metode,
-      jumlah_uang: metode === 'Beras' ? 0 : totalUang,
-      jumlah_beras: metode === 'Beras' ? totalBeras : 0,
-      amil_pencatat: user?.user_metadata?.nama ?? user?.email ?? null,
+      jumlah_uang: totalFidyah,
+      jumlah_beras: 0,
       lembaga_id: profil?.lembaga_id ?? null,
+      amil_pencatat: user?.user_metadata?.nama ?? user?.email ?? null,
     }).select('id')
 
     setSaving(false)
     if (error) { setStepError('Gagal menyimpan. Coba lagi.'); return }
+
     const insertedId = (data as { id: number }[])[0]?.id ?? 0
     const tanggalNow = new Date().toISOString()
     if (metode === 'QRIS') {
-      setQrData({ id: insertedId, nominal: '' })
+      setQrData({ id: insertedId, nominal: formatRupiah(totalFidyah) })
     } else {
       setStruk({ id: insertedId, tanggal: tanggalNow })
-    }
-    return
-
-    if (metode === 'QRIS' && data) {
-      setQrData({
-        id: (data as { id: number }[])[0]?.id ?? 0,
-        nominal: formatRupiah(totalUang),
-      })
-    } else {
-      router.push('/transaksi')
     }
   }
 
@@ -114,7 +97,7 @@ export default function ZakatFitrahPage() {
       <main style={s.main}>
         <div style={s.header}>
           <div>
-            <h1 style={s.headerTitle}>Zakat Fitrah</h1>
+            <h1 style={s.headerTitle}>Fidyah</h1>
             <p style={s.headerSub}>Muzakki: <strong>{muzakkiNama}</strong></p>
           </div>
         </div>
@@ -123,7 +106,9 @@ export default function ZakatFitrahPage() {
           <div style={s.progressTrack}>
             <div style={{ ...s.progressFill, width: `${progress}%` }} />
           </div>
-          <span style={s.progressLabel}>{step === 'kalkulasi' ? 'Kalkulasi' : step === 'metode' ? 'Metode' : 'Konfirmasi'}</span>
+          <span style={s.progressLabel}>
+            {step === 'kalkulasi' ? 'Kalkulasi' : step === 'metode' ? 'Metode' : 'Konfirmasi'}
+          </span>
         </div>
 
         <div style={s.formWrap}>
@@ -132,44 +117,40 @@ export default function ZakatFitrahPage() {
           {step === 'kalkulasi' && (
             <div style={s.card}>
               <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Kalkulasi Zakat Fitrah</h2>
-                <p style={s.cardSub}>Standar Jabodetabek — Rp 45.000 atau 2.5 Kg per jiwa</p>
+                <h2 style={s.cardTitle}>Kalkulasi Fidyah</h2>
+                <p style={s.cardSub}>Rp 65.000 per hari puasa yang ditinggalkan</p>
               </div>
               <div style={s.cardBody}>
                 <div style={s.infoBox}>
                   <div style={s.infoGrid}>
                     <div>
-                      <p style={s.infoLabel}>Standar Uang / jiwa</p>
-                      <p style={s.infoValue}>{formatRupiah(FITRAH_UANG)}</p>
+                      <p style={s.infoLabel}>Standar Fidyah / hari</p>
+                      <p style={s.infoValue}>{formatRupiah(FIDYAH_PER_HARI)}</p>
                     </div>
                     <div>
-                      <p style={s.infoLabel}>Standar Beras / jiwa</p>
-                      <p style={s.infoValue}>{FITRAH_BERAS} Kg</p>
+                      <p style={s.infoLabel}>Maks. hari Ramadan</p>
+                      <p style={s.infoValue}>30 hari</p>
                     </div>
                   </div>
                 </div>
 
                 <div style={s.field}>
-                  <label style={s.label}>Jumlah Jiwa</label>
-                  <input type="number" min="1" placeholder="1"
-                    value={jumlahJiwa}
-                    onChange={e => setJumlahJiwa(e.target.value)}
-                    style={s.input} autoFocus />
+                  <label style={s.label}>Jumlah Hari yang Ditinggalkan</label>
+                  <input
+                    type="number" min="1" max="30" placeholder="1"
+                    value={jumlahHari}
+                    onChange={e => setJumlahHari(e.target.value)}
+                    style={s.input}
+                    autoFocus
+                  />
                 </div>
 
-                {jumlahJiwa && jiwaNum > 0 && (
+                {jumlahHari && hariNum > 0 && (
                   <div style={s.hasilBox}>
-                    <p style={s.hasilTitle}>📊 Hasil untuk {jiwaNum} jiwa</p>
-                    <div style={s.hasilGrid}>
-                      <div style={s.hasilItem}>
-                        <p style={s.hasilItemLabel}>Jika bayar uang</p>
-                        <p style={s.hasilItemValue}>{formatRupiah(totalUang)}</p>
-                      </div>
-                      <div style={s.hasilDivider} />
-                      <div style={s.hasilItem}>
-                        <p style={s.hasilItemLabel}>Jika bayar beras</p>
-                        <p style={s.hasilItemValue}>{totalBeras} Kg</p>
-                      </div>
+                    <p style={s.hasilTitle}>📊 Hasil untuk {hariNum} hari</p>
+                    <div style={s.hasilRow}>
+                      <span style={s.hasilRowLabel}>Total Fidyah</span>
+                      <span style={s.hasilRowValue}>{formatRupiah(totalFidyah)}</span>
                     </div>
                   </div>
                 )}
@@ -182,18 +163,14 @@ export default function ZakatFitrahPage() {
             <div style={s.card}>
               <div style={s.cardHeader}>
                 <h2 style={s.cardTitle}>Metode Pembayaran</h2>
-                <p style={s.cardSub}>{jiwaNum} jiwa — {formatRupiah(totalUang)} atau {totalBeras} Kg beras</p>
+                <p style={s.cardSub}>{hariNum} hari × Rp 65.000 = <strong>{formatRupiah(totalFidyah)}</strong></p>
               </div>
               <div style={s.cardBody}>
                 {METODE_LIST.map(m => (
                   <button key={m} onClick={() => setMetode(m)}
                     style={{ ...s.metodeBtn, ...(metode === m ? s.metodeBtnActive : {}) }}>
                     <span style={s.metodeIcon}>{METODE_ICON[m]}</span>
-                    <div style={s.metodeText}>
-                      <span style={s.metodeLabel}>{m}</span>
-                      {m === 'Beras' && <span style={s.metodeHint}>Bayar {totalBeras} Kg</span>}
-                      {m !== 'Beras' && <span style={s.metodeHint}>Bayar {formatRupiah(totalUang)}</span>}
-                    </div>
+                    <span style={s.metodeLabel}>{m}</span>
                     {metode === m && <span style={s.metodeCheck}>✓</span>}
                   </button>
                 ))}
@@ -211,10 +188,11 @@ export default function ZakatFitrahPage() {
               <div style={s.cardBody}>
                 <div style={s.konfirmasiList}>
                   {[
-                    { label: 'Muzakki',     value: muzakkiNama },
-                    { label: 'Jenis Zakat', value: 'Zakat Fitrah' },
-                    { label: 'Jumlah Jiwa', value: `${jiwaNum} jiwa` },
-                    { label: 'Metode',      value: `${METODE_ICON[metode]} ${metode}` },
+                    { label: 'Muzakki',      value: muzakkiNama },
+                    { label: 'Jenis',        value: 'Fidyah' },
+                    { label: 'Jumlah Hari',  value: `${hariNum} hari` },
+                    { label: 'Tarif / Hari', value: formatRupiah(FIDYAH_PER_HARI) },
+                    { label: 'Metode',       value: `${METODE_ICON[metode]} ${metode}` },
                   ].map(r => (
                     <div key={r.label} style={s.konfRow}>
                       <span style={s.konfLabel}>{r.label}</span>
@@ -222,9 +200,9 @@ export default function ZakatFitrahPage() {
                     </div>
                   ))}
                   <div style={{ ...s.konfRow, borderBottom: 'none' }}>
-                    <span style={s.konfLabel}>Total {metode === 'Beras' ? 'Beras' : 'Uang'}</span>
+                    <span style={s.konfLabel}>Total Fidyah</span>
                     <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: '18px' }}>
-                      {metode === 'Beras' ? `${totalBeras} Kg` : formatRupiah(totalUang)}
+                      {formatRupiah(totalFidyah)}
                     </span>
                   </div>
                 </div>
@@ -260,7 +238,32 @@ export default function ZakatFitrahPage() {
           onClose={() => router.push('/transaksi')}
         />
       )}
+
+      {struk && metode && (
+        <StrukModal
+          data={{
+            transaksiId: struk.id,
+            tanggal: struk.tanggal,
+            muzakkiNama,
+            jenisZakat: 'Fidyah',
+            metode,
+            jumlahUang: totalFidyah,
+            jumlahBeras: 0,
+            amilPencatat: '',
+          }}
+          onClose={() => setStruk(null)}
+          onRedirect={() => router.push('/transaksi')}
+        />
+      )}
     </div>
+  )
+}
+
+export default function FidyahPage() {
+  return (
+    <Suspense>
+      <FidyahForm />
+    </Suspense>
   )
 }
 
@@ -275,7 +278,7 @@ const s: Record<string, React.CSSProperties> = {
   progressFill: { height: '100%', background: 'linear-gradient(90deg, #2D7A50, #4CAF7D)', borderRadius: '99px', transition: 'width 0.3s ease' },
   progressLabel: { fontSize: '12px', fontWeight: 600, color: '#A8A29E', textTransform: 'capitalize' },
   formWrap: { maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '16px' },
-  card: { background: '#fff', borderRadius: '16px', border: '1px solid #EDE8E0', overflow: 'hidden' },
+  card: { background: '#fff', borderRadius: '16px', border: '1px solid #EDE8E0' },
   cardHeader: { padding: '20px 24px 0' },
   cardTitle: { fontSize: '17px', fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
   cardSub: { fontSize: '13px', color: '#A8A29E', marginBottom: '20px' },
@@ -287,19 +290,15 @@ const s: Record<string, React.CSSProperties> = {
   field: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { fontSize: '13px', fontWeight: 600, color: '#44403C' },
   input: { width: '100%', padding: '11px 14px', fontSize: '14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
-  hasilBox: { background: '#F0F7F3', borderRadius: '10px', padding: '16px', border: '1.5px solid #2D7A50' },
-  hasilTitle: { fontSize: '13px', fontWeight: 700, color: '#1A4731', marginBottom: '12px' },
-  hasilGrid: { display: 'flex', alignItems: 'stretch' },
-  hasilItem: { flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' },
-  hasilDivider: { width: '1px', background: '#C9E8D5', margin: '0 16px' },
-  hasilItemLabel: { fontSize: '11px', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.3px' },
-  hasilItemValue: { fontSize: '18px', fontWeight: 700, color: '#2D7A50' },
+  hasilBox: { background: '#F0F7F3', borderRadius: '10px', padding: '16px', border: '1.5px solid #2D7A50', display: 'flex', flexDirection: 'column', gap: '10px' },
+  hasilTitle: { fontSize: '13px', fontWeight: 700, color: '#1A4731' },
+  hasilRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  hasilRowLabel: { fontSize: '13px', color: '#57534E' },
+  hasilRowValue: { fontSize: '20px', fontWeight: 700, color: '#2D7A50' },
   metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
   metodeBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
-  metodeIcon: { fontSize: '22px', flexShrink: 0 },
-  metodeText: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' },
-  metodeLabel: { fontSize: '14px', fontWeight: 600, color: '#1C1917' },
-  metodeHint: { fontSize: '12px', color: '#78716C' },
+  metodeIcon: { fontSize: '22px' },
+  metodeLabel: { flex: 1, fontSize: '14px', fontWeight: 600, color: '#1C1917', textAlign: 'left' },
   metodeCheck: { fontSize: '14px', color: '#2D7A50', fontWeight: 700 },
   konfirmasiList: { display: 'flex', flexDirection: 'column' },
   konfRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #F5F0E8' },

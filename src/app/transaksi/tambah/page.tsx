@@ -7,18 +7,15 @@ import Sidebar from '@/components/Sidebar'
 
 interface Muzakki { id: number; nama: string }
 
-// 1. Ubah nama fungsi utama menjadi TambahContent (isi logika 100% milikmu)
 function TambahContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
-  // Baca URL params
   const paramMuzakkiId = searchParams.get('muzakkiId')
   const paramMuzakkiNama = searchParams.get('muzakkiNama')
   const paramStep = searchParams.get('step')
 
-  // Init state dari URL params kalau ada (saat back dari sub-page)
   const [step, setStep] = useState<1 | 2>(paramStep === '2' ? 2 : 1)
   const [selectedMuzakki, setSelectedMuzakki] = useState<Muzakki | null>(
     paramMuzakkiId && paramMuzakkiNama
@@ -70,7 +67,7 @@ function TambahContent() {
     setStep(2)
   }
 
-  function handlePilihJenis(jenis: 'zakat-mal' | 'zakat-fitrah' | 'infaq') {
+  function handlePilihJenis(jenis: 'zakat-mal' | 'zakat-fitrah' | 'infaq' | 'fidyah') {
     if (!selectedMuzakki) return
     const params = new URLSearchParams({
       muzakkiId: String(selectedMuzakki.id),
@@ -127,7 +124,7 @@ function TambahContent() {
             </div>
           )}
 
-          {/* Step 2 — Pilih Jenis Zakat */}
+          {/* Step 2 — Pilih Jenis */}
           {step === 2 && (
             <div style={s.card}>
               <div style={s.cardHeader}>
@@ -136,9 +133,10 @@ function TambahContent() {
               </div>
               <div style={s.cardBody}>
                 {([
-                  { key: 'zakat-mal',    icon: '🏦', label: 'Zakat Mal',    desc: 'Zakat atas harta, dihitung otomatis dari nisab emas' },
-                  { key: 'zakat-fitrah', icon: '🌙', label: 'Zakat Fitrah',  desc: 'Zakat jiwa, standar Jabodetabek Rp 45.000 atau 2.5 Kg/jiwa' },
-                  { key: 'infaq',        icon: '🤲', label: 'Infaq/Sedekah', desc: 'Sumbangan sukarela, nominal bebas' },
+                  { key: 'zakat-mal',    icon: '🏦', label: 'Zakat Mal',     desc: 'Zakat atas harta, dihitung otomatis dari nisab emas' },
+                  { key: 'zakat-fitrah', icon: '🌙', label: 'Zakat Fitrah',   desc: 'Zakat jiwa, standar Jabodetabek Rp 45.000 atau 2.5 Kg/jiwa' },
+                  { key: 'fidyah',       icon: '🍚', label: 'Fidyah',         desc: 'Pengganti puasa, Rp 65.000 per hari' },
+                  { key: 'infaq',        icon: '🤲', label: 'Infaq/Sedekah',  desc: 'Sumbangan sukarela, nominal bebas' },
                 ] as const).map(item => (
                   <button key={item.key}
                     onClick={() => handlePilihJenis(item.key)}
@@ -198,7 +196,6 @@ function TambahContent() {
   )
 }
 
-// 2. Eksport utama dibungkus Suspense di paling bawah
 export default function TambahPage() {
   return (
     <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>

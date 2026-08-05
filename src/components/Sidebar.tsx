@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
@@ -48,6 +48,17 @@ const navItems = [
       </svg>
     ),
   },
+  {
+    href: '/mustahik',
+    label: 'Mustahik',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+        <circle cx="13" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+        <path d="M1.5 15c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5M8.5 15c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
 ]
 
 export default function Sidebar() {
@@ -55,13 +66,38 @@ export default function Sidebar() {
   const router = useRouter()
   const supabase = createClient()
 
+  const [isMobile, setIsMobile] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Tutup sidebar otomatis saat navigasi
+  useEffect(() => {
+    setIsOpen(false)
+  }, [pathname])
+
+  // Lock scroll body saat sidebar mobile terbuka
+  useEffect(() => {
+    if (isMobile && isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isMobile, isOpen])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
   }
 
-  return (
-    <aside style={s.sidebar}>
+  const sidebarContent = (
+    <>
       {/* Brand */}
       <div style={s.brand}>
         <div style={s.brandIcon}>
@@ -74,6 +110,9 @@ export default function Sidebar() {
           <p style={s.brandName}>Sistem Zakat</p>
           <p style={s.brandSub}>Panel Amil</p>
         </div>
+        {isMobile && (
+          <button onClick={() => setIsOpen(false)} style={s.closeBtn}>✕</button>
+        )}
       </div>
 
       {/* Nav */}
@@ -127,24 +166,42 @@ export default function Sidebar() {
           Keluar
         </button>
       </div>
-    </aside>
+    </>
+  )
+
+  // ── Desktop: sidebar fixed seperti biasa ──
+  if (!isMobile) {
+    return <aside style={s.sidebarDesktop}>{sidebarContent}</aside>
+  }
+
+  // ── Mobile: hamburger + slide-in sidebar ──
+  return (
+    <>
+      {/* Hamburger button — fixed di pojok kiri atas */}
+      <button onClick={() => setIsOpen(true)} style={s.hamburgerBtn}>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M2.5 5.5h15M2.5 10h15M2.5 14.5h15" stroke="#1C1917" strokeWidth="1.8" strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {/* Overlay */}
+      {isOpen && (
+        <div style={s.overlay} onClick={() => setIsOpen(false)} />
+      )}
+
+      {/* Sidebar slide-in */}
+      <aside style={{
+        ...s.sidebarMobile,
+        transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+      }}>
+        {sidebarContent}
+      </aside>
+    </>
   )
 }
 
 const s: Record<string, React.CSSProperties> = {
-  sidebar: {
-    width: '220px',
-    minHeight: '100vh',
-    background: '#FFFFFF',
-    borderRight: '1px solid #EDE8E0',
-    display: 'flex',
-    flexDirection: 'column',
-    padding: '24px 16px',
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    bottom: 0,
-  },
+  // ── Shared base ──
   brand: {
     display: 'flex',
     alignItems: 'center',
@@ -152,6 +209,7 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: '32px',
     paddingBottom: '24px',
     borderBottom: '1px solid #EDE8E0',
+    position: 'relative',
   },
   brandIcon: {
     width: '36px',
@@ -163,97 +221,67 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     flexShrink: 0,
   },
-  brandName: {
-    fontSize: '13px',
-    fontWeight: 700,
-    color: '#1C1917',
-    lineHeight: 1.2,
-  },
-  brandSub: {
-    fontSize: '11px',
-    color: '#A8A29E',
-    marginTop: '2px',
-  },
-  nav: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
-    flex: 1,
-  },
-  navLabel: {
-    fontSize: '10px',
-    fontWeight: 700,
-    letterSpacing: '1px',
-    color: '#C4BDB4',
-    marginBottom: '8px',
-    paddingLeft: '10px',
-  },
-  navItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '9px 10px',
-    borderRadius: '8px',
-    fontSize: '13.5px',
-    fontWeight: 500,
-    color: '#57534E',
-    textDecoration: 'none',
-    transition: 'background 0.15s',
-  },
-  navItemActive: {
-    background: '#F0F7F3',
-    color: '#1A4731',
-    fontWeight: 600,
-  },
-  navHighlight: {
-    background: '#FDF8EE',
-    color: '#92681A',
-    fontWeight: 600,
-    marginTop: '8px',
-  },
-  navIcon: {
-    display: 'flex',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  bottomSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
-    borderTop: '1px solid #EDE8E0',
-    paddingTop: '12px',
-    marginTop: '8px',
-  },
-  bottomBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '9px 10px',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#57534E',
-    textDecoration: 'none',
-    transition: 'background 0.15s',
-  },
-  bottomBtnActive: {
-    background: '#F0F7F3',
-    color: '#1A4731',
-    fontWeight: 600,
-  },
-  logoutBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '9px 10px',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#A8A29E',
+  brandName: { fontSize: '13px', fontWeight: 700, color: '#1C1917', lineHeight: 1.2 },
+  brandSub: { fontSize: '11px', color: '#A8A29E', marginTop: '2px' },
+  closeBtn: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
     background: 'none',
     border: 'none',
+    fontSize: '16px',
+    color: '#A8A29E',
     cursor: 'pointer',
-    width: '100%',
-    textAlign: 'left',
+    padding: '6px',
+  },
+  nav: { display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 },
+  navLabel: { fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: '#C4BDB4', marginBottom: '8px', paddingLeft: '10px' },
+  navItem: {
+    display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px',
+    borderRadius: '8px', fontSize: '13.5px', fontWeight: 500, color: '#57534E',
+    textDecoration: 'none', transition: 'background 0.15s',
+  },
+  navItemActive: { background: '#F0F7F3', color: '#1A4731', fontWeight: 600 },
+  navHighlight: { background: '#FDF8EE', color: '#92681A', fontWeight: 600, marginTop: '8px' },
+  navIcon: { display: 'flex', alignItems: 'center', flexShrink: 0 },
+  bottomSection: {
+    display: 'flex', flexDirection: 'column', gap: '2px',
+    borderTop: '1px solid #EDE8E0', paddingTop: '12px', marginTop: '8px',
+  },
+  bottomBtn: {
+    display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 10px',
+    borderRadius: '8px', fontSize: '13px', fontWeight: 500, color: '#57534E',
+    textDecoration: 'none', transition: 'background 0.15s',
+  },
+  bottomBtnActive: { background: '#F0F7F3', color: '#1A4731', fontWeight: 600 },
+  logoutBtn: {
+    display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 10px',
+    borderRadius: '8px', fontSize: '13px', fontWeight: 500, color: '#A8A29E',
+    background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left',
+  },
+
+  // ── Desktop variant ──
+  sidebarDesktop: {
+    width: '220px', minHeight: '100vh', background: '#FFFFFF',
+    borderRight: '1px solid #EDE8E0', display: 'flex', flexDirection: 'column',
+    padding: '24px 16px', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 10,
+  },
+
+  // ── Mobile variant ──
+  hamburgerBtn: {
+    position: 'fixed', top: '16px', left: '16px', zIndex: 50,
+    width: '40px', height: '40px', borderRadius: '10px',
+    background: '#fff', border: '1px solid #EDE8E0',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+  },
+  overlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 90,
+  },
+  sidebarMobile: {
+    position: 'fixed', top: 0, left: 0, bottom: 0, width: '260px',
+    background: '#fff', zIndex: 100, display: 'flex', flexDirection: 'column',
+    padding: '24px 16px', boxShadow: '4px 0 24px rgba(0,0,0,0.12)',
+    transition: 'transform 0.25s ease',
   },
 }
