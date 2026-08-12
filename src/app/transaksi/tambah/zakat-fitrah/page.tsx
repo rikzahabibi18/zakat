@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Suspense, useState } from 'react'
+import React, { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
@@ -19,10 +19,22 @@ function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth < breakpoint) }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 function ZakatFitrahForm() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
+  const isMobile = useIsMobile()
 
   const muzakkiId = params.get('muzakkiId') ?? ''
   const muzakkiNama = params.get('muzakkiNama') ?? ''
@@ -98,10 +110,14 @@ function ZakatFitrahForm() {
   return (
     <div style={s.shell}>
       <Sidebar />
-      <main style={s.main}>
+      <main style={{
+        ...s.main,
+        marginLeft: isMobile ? 0 : '220px',
+        padding: isMobile ? '84px 16px 24px' : '32px 36px',
+      }}>
         <div style={s.header}>
           <div>
-            <h1 style={s.headerTitle}>Zakat Fitrah</h1>
+            <h1 style={{ ...s.headerTitle, fontSize: isMobile ? '21px' : '26px' }}>Zakat Fitrah</h1>
             <p style={s.headerSub}>Muzakki: <strong>{muzakkiNama}</strong></p>
           </div>
         </div>
@@ -113,25 +129,25 @@ function ZakatFitrahForm() {
           <span style={s.progressLabel}>{step === 'kalkulasi' ? 'Kalkulasi' : step === 'metode' ? 'Metode' : 'Konfirmasi'}</span>
         </div>
 
-        <div style={s.formWrap}>
+        <div style={{ ...s.formWrap, maxWidth: isMobile ? '100%' : '560px' }}>
 
           {/* Kalkulasi */}
           {step === 'kalkulasi' && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Kalkulasi Zakat Fitrah</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Kalkulasi Zakat Fitrah</h2>
                 <p style={s.cardSub}>Standar Jabodetabek — Rp 45.000 atau 2.5 Kg per jiwa</p>
               </div>
-              <div style={s.cardBody}>
-                <div style={s.infoBox}>
-                  <div style={s.infoGrid}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
+                <div style={{ ...s.infoBox, padding: isMobile ? '12px' : '14px' }}>
+                  <div style={{ ...s.infoGrid, gap: isMobile ? '10px' : '12px' }}>
                     <div>
                       <p style={s.infoLabel}>Standar Uang / jiwa</p>
-                      <p style={s.infoValue}>{formatRupiah(FITRAH_UANG)}</p>
+                      <p style={{ ...s.infoValue, fontSize: isMobile ? '13.5px' : '15px' }}>{formatRupiah(FITRAH_UANG)}</p>
                     </div>
                     <div>
                       <p style={s.infoLabel}>Standar Beras / jiwa</p>
-                      <p style={s.infoValue}>{FITRAH_BERAS} Kg</p>
+                      <p style={{ ...s.infoValue, fontSize: isMobile ? '13.5px' : '15px' }}>{FITRAH_BERAS} Kg</p>
                     </div>
                   </div>
                 </div>
@@ -141,21 +157,25 @@ function ZakatFitrahForm() {
                   <input type="number" min="1" placeholder="1"
                     value={jumlahJiwa}
                     onChange={e => setJumlahJiwa(e.target.value)}
-                    style={s.input} autoFocus />
+                    style={{ ...s.input, fontSize: isMobile ? '16px' : '14px' }}
+                    autoFocus={!isMobile} />
                 </div>
 
                 {jumlahJiwa && jiwaNum > 0 && (
-                  <div style={s.hasilBox}>
+                  <div style={{ ...s.hasilBox, padding: isMobile ? '14px' : '16px' }}>
                     <p style={s.hasilTitle}>📊 Hasil untuk {jiwaNum} jiwa</p>
-                    <div style={s.hasilGrid}>
+                    <div style={{ ...s.hasilGrid, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '12px' : 0 }}>
                       <div style={s.hasilItem}>
                         <p style={s.hasilItemLabel}>Jika bayar uang</p>
-                        <p style={s.hasilItemValue}>{formatRupiah(totalUang)}</p>
+                        <p style={{ ...s.hasilItemValue, fontSize: isMobile ? '16px' : '18px' }}>{formatRupiah(totalUang)}</p>
                       </div>
-                      <div style={s.hasilDivider} />
+                      {isMobile
+                        ? <div style={s.hasilDividerH} />
+                        : <div style={s.hasilDivider} />
+                      }
                       <div style={s.hasilItem}>
                         <p style={s.hasilItemLabel}>Jika bayar beras</p>
-                        <p style={s.hasilItemValue}>{totalBeras} Kg</p>
+                        <p style={{ ...s.hasilItemValue, fontSize: isMobile ? '16px' : '18px' }}>{totalBeras} Kg</p>
                       </div>
                     </div>
                   </div>
@@ -167,17 +187,21 @@ function ZakatFitrahForm() {
           {/* Metode */}
           {step === 'metode' && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Metode Pembayaran</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Metode Pembayaran</h2>
                 <p style={s.cardSub}>{jiwaNum} jiwa — {formatRupiah(totalUang)} atau {totalBeras} Kg beras</p>
               </div>
-              <div style={s.cardBody}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
                 {METODE_LIST.map(m => (
                   <button key={m} onClick={() => setMetode(m)}
-                    style={{ ...s.metodeBtn, ...(metode === m ? s.metodeBtnActive : {}) }}>
-                    <span style={s.metodeIcon}>{METODE_ICON[m]}</span>
+                    style={{
+                      ...s.metodeBtn,
+                      ...(metode === m ? s.metodeBtnActive : {}),
+                      padding: isMobile ? '12px 14px' : '14px 16px',
+                    }}>
+                    <span style={{ ...s.metodeIcon, fontSize: isMobile ? '19px' : '22px' }}>{METODE_ICON[m]}</span>
                     <div style={s.metodeText}>
-                      <span style={s.metodeLabel}>{m}</span>
+                      <span style={{ ...s.metodeLabel, fontSize: isMobile ? '13.5px' : '14px' }}>{m}</span>
                       {m === 'Beras' && <span style={s.metodeHint}>Bayar {totalBeras} Kg</span>}
                       {m !== 'Beras' && <span style={s.metodeHint}>Bayar {formatRupiah(totalUang)}</span>}
                     </div>
@@ -191,11 +215,11 @@ function ZakatFitrahForm() {
           {/* Konfirmasi */}
           {step === 'konfirmasi' && metode && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Konfirmasi Transaksi</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Konfirmasi Transaksi</h2>
                 <p style={s.cardSub}>Periksa kembali sebelum menyimpan</p>
               </div>
-              <div style={s.cardBody}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
                 <div style={s.konfirmasiList}>
                   {[
                     { label: 'Muzakki',     value: muzakkiNama },
@@ -210,7 +234,7 @@ function ZakatFitrahForm() {
                   ))}
                   <div style={{ ...s.konfRow, borderBottom: 'none' }}>
                     <span style={s.konfLabel}>Total {metode === 'Beras' ? 'Beras' : 'Uang'}</span>
-                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: '18px' }}>
+                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: isMobile ? '16px' : '18px' }}>
                       {metode === 'Beras' ? `${totalBeras} Kg` : formatRupiah(totalUang)}
                     </span>
                   </div>
@@ -226,15 +250,15 @@ function ZakatFitrahForm() {
           {stepError && <div style={s.errorBox}>⚠ {stepError}</div>}
 
           {step !== 'konfirmasi' && (
-            <div style={s.navRow}>
-              <button onClick={handleBack} style={s.navBackBtn}>← Kembali</button>
+            <div style={{ ...s.navRow, flexDirection: isMobile ? 'column' : 'row' }}>
+              <button onClick={handleBack} style={{ ...s.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
               <button onClick={handleNext} style={s.navNextBtn}>
                 {step === 'metode' ? 'Lihat Ringkasan →' : 'Lanjut →'}
               </button>
             </div>
           )}
           {step === 'konfirmasi' && (
-            <button onClick={handleBack} style={s.navBackBtn}>← Kembali</button>
+            <button onClick={handleBack} style={{ ...s.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
           )}
         </div>
       </main>
@@ -278,39 +302,40 @@ export default function ZakatFitrahPage() {
 
 const s: Record<string, React.CSSProperties> = {
   shell: { display: 'flex', minHeight: '100vh', background: '#F8F4ED', fontFamily: "'Plus Jakarta Sans', sans-serif" },
-  main: { marginLeft: '220px', flex: 1, padding: '32px 36px' },
+  main: { flex: 1 },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #EDE8E0' },
-  headerTitle: { fontSize: '26px', fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px', marginBottom: '4px' },
+  headerTitle: { fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px', marginBottom: '4px' },
   headerSub: { fontSize: '13px', color: '#A8A29E' },
   progressWrap: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' },
   progressTrack: { flex: 1, height: '6px', background: '#EDE8E0', borderRadius: '99px', overflow: 'hidden' },
   progressFill: { height: '100%', background: 'linear-gradient(90deg, #2D7A50, #4CAF7D)', borderRadius: '99px', transition: 'width 0.3s ease' },
   progressLabel: { fontSize: '12px', fontWeight: 600, color: '#A8A29E', textTransform: 'capitalize' },
-  formWrap: { maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '16px' },
+  formWrap: { display: 'flex', flexDirection: 'column', gap: '16px' },
   card: { background: '#fff', borderRadius: '16px', border: '1px solid #EDE8E0', overflow: 'hidden' },
-  cardHeader: { padding: '20px 24px 0' },
-  cardTitle: { fontSize: '17px', fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
+  cardHeader: {},
+  cardTitle: { fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
   cardSub: { fontSize: '13px', color: '#A8A29E', marginBottom: '20px' },
-  cardBody: { padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: '14px' },
-  infoBox: { background: '#F8F4ED', borderRadius: '10px', padding: '14px', border: '1px solid #EDE8E0' },
-  infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
+  cardBody: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  infoBox: { background: '#F8F4ED', borderRadius: '10px', border: '1px solid #EDE8E0' },
+  infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr' },
   infoLabel: { fontSize: '10px', fontWeight: 700, color: '#A8A29E', letterSpacing: '0.3px', textTransform: 'uppercase', marginBottom: '4px' },
-  infoValue: { fontSize: '15px', fontWeight: 700, color: '#1C1917' },
+  infoValue: { fontWeight: 700, color: '#1C1917' },
   field: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { fontSize: '13px', fontWeight: 600, color: '#44403C' },
-  input: { width: '100%', padding: '11px 14px', fontSize: '14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
-  hasilBox: { background: '#F0F7F3', borderRadius: '10px', padding: '16px', border: '1.5px solid #2D7A50' },
+  input: { width: '100%', padding: '11px 14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
+  hasilBox: { background: '#F0F7F3', borderRadius: '10px', border: '1.5px solid #2D7A50' },
   hasilTitle: { fontSize: '13px', fontWeight: 700, color: '#1A4731', marginBottom: '12px' },
   hasilGrid: { display: 'flex', alignItems: 'stretch' },
   hasilItem: { flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' },
   hasilDivider: { width: '1px', background: '#C9E8D5', margin: '0 16px' },
+  hasilDividerH: { height: '1px', background: '#C9E8D5', width: '100%' },
   hasilItemLabel: { fontSize: '11px', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.3px' },
-  hasilItemValue: { fontSize: '18px', fontWeight: 700, color: '#2D7A50' },
-  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
+  hasilItemValue: { fontWeight: 700, color: '#2D7A50' },
+  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
   metodeBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
-  metodeIcon: { fontSize: '22px', flexShrink: 0 },
+  metodeIcon: { flexShrink: 0 },
   metodeText: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' },
-  metodeLabel: { fontSize: '14px', fontWeight: 600, color: '#1C1917' },
+  metodeLabel: { fontWeight: 600, color: '#1C1917' },
   metodeHint: { fontSize: '12px', color: '#78716C' },
   metodeCheck: { fontSize: '14px', color: '#2D7A50', fontWeight: 700 },
   konfirmasiList: { display: 'flex', flexDirection: 'column' },

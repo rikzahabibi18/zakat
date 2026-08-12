@@ -68,6 +68,11 @@ export default function Sidebar() {
 
   const [isMobile, setIsMobile] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [prevPathname, setPrevPathname] = useState(pathname)
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname)
+    setIsOpen(false)
+  }
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768)
@@ -75,11 +80,6 @@ export default function Sidebar() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
-
-  // Tutup sidebar otomatis saat navigasi
-  useEffect(() => {
-    setIsOpen(false)
-  }, [pathname])
 
   // Lock scroll body saat sidebar mobile terbuka
   useEffect(() => {

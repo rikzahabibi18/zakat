@@ -21,6 +21,7 @@ export default function QRConfirmModal({ transaksiId, muzakkiNama, nominal, onCl
     // Buat URL konfirmasi — pakai IP lokal supaya bisa diakses dari HP
     const baseUrl = window.location.origin
     const konfirmasiUrl = `${baseUrl}/konfirmasi/${transaksiId}`
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- window hanya tersedia di client, wajib dihitung dalam effect untuk hindari hydration mismatch
     setLocalUrl(konfirmasiUrl)
 
     // Generate QR code

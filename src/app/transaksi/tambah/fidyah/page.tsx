@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Suspense, useState } from 'react'
+import React, { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
@@ -18,10 +18,22 @@ function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth < breakpoint) }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 function FidyahForm() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
+  const isMobile = useIsMobile()
 
   const muzakkiId = params.get('muzakkiId') ?? ''
   const muzakkiNama = params.get('muzakkiNama') ?? ''
@@ -94,10 +106,14 @@ function FidyahForm() {
   return (
     <div style={s.shell}>
       <Sidebar />
-      <main style={s.main}>
+      <main style={{
+        ...s.main,
+        marginLeft: isMobile ? 0 : '220px',
+        padding: isMobile ? '84px 16px 24px' : '32px 36px',
+      }}>
         <div style={s.header}>
           <div>
-            <h1 style={s.headerTitle}>Fidyah</h1>
+            <h1 style={{ ...s.headerTitle, fontSize: isMobile ? '21px' : '26px' }}>Fidyah</h1>
             <p style={s.headerSub}>Muzakki: <strong>{muzakkiNama}</strong></p>
           </div>
         </div>
@@ -111,25 +127,25 @@ function FidyahForm() {
           </span>
         </div>
 
-        <div style={s.formWrap}>
+        <div style={{ ...s.formWrap, maxWidth: isMobile ? '100%' : '560px' }}>
 
           {/* Kalkulasi */}
           {step === 'kalkulasi' && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Kalkulasi Fidyah</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Kalkulasi Fidyah</h2>
                 <p style={s.cardSub}>Rp 65.000 per hari puasa yang ditinggalkan</p>
               </div>
-              <div style={s.cardBody}>
-                <div style={s.infoBox}>
-                  <div style={s.infoGrid}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
+                <div style={{ ...s.infoBox, padding: isMobile ? '12px' : '14px' }}>
+                  <div style={{ ...s.infoGrid, gap: isMobile ? '10px' : '12px' }}>
                     <div>
                       <p style={s.infoLabel}>Standar Fidyah / hari</p>
-                      <p style={s.infoValue}>{formatRupiah(FIDYAH_PER_HARI)}</p>
+                      <p style={{ ...s.infoValue, fontSize: isMobile ? '13.5px' : '15px' }}>{formatRupiah(FIDYAH_PER_HARI)}</p>
                     </div>
                     <div>
                       <p style={s.infoLabel}>Maks. hari Ramadan</p>
-                      <p style={s.infoValue}>30 hari</p>
+                      <p style={{ ...s.infoValue, fontSize: isMobile ? '13.5px' : '15px' }}>30 hari</p>
                     </div>
                   </div>
                 </div>
@@ -140,17 +156,17 @@ function FidyahForm() {
                     type="number" min="1" max="30" placeholder="1"
                     value={jumlahHari}
                     onChange={e => setJumlahHari(e.target.value)}
-                    style={s.input}
-                    autoFocus
+                    style={{ ...s.input, fontSize: isMobile ? '16px' : '14px' }}
+                    autoFocus={!isMobile}
                   />
                 </div>
 
                 {jumlahHari && hariNum > 0 && (
-                  <div style={s.hasilBox}>
+                  <div style={{ ...s.hasilBox, padding: isMobile ? '14px' : '16px' }}>
                     <p style={s.hasilTitle}>📊 Hasil untuk {hariNum} hari</p>
-                    <div style={s.hasilRow}>
+                    <div style={{ ...s.hasilRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? '4px' : 0 }}>
                       <span style={s.hasilRowLabel}>Total Fidyah</span>
-                      <span style={s.hasilRowValue}>{formatRupiah(totalFidyah)}</span>
+                      <span style={{ ...s.hasilRowValue, fontSize: isMobile ? '17px' : '20px' }}>{formatRupiah(totalFidyah)}</span>
                     </div>
                   </div>
                 )}
@@ -161,16 +177,16 @@ function FidyahForm() {
           {/* Metode */}
           {step === 'metode' && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Metode Pembayaran</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Metode Pembayaran</h2>
                 <p style={s.cardSub}>{hariNum} hari × Rp 65.000 = <strong>{formatRupiah(totalFidyah)}</strong></p>
               </div>
-              <div style={s.cardBody}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
                 {METODE_LIST.map(m => (
                   <button key={m} onClick={() => setMetode(m)}
-                    style={{ ...s.metodeBtn, ...(metode === m ? s.metodeBtnActive : {}) }}>
-                    <span style={s.metodeIcon}>{METODE_ICON[m]}</span>
-                    <span style={s.metodeLabel}>{m}</span>
+                    style={{ ...s.metodeBtn, ...(metode === m ? s.metodeBtnActive : {}), padding: isMobile ? '12px 14px' : '14px 16px' }}>
+                    <span style={{ ...s.metodeIcon, fontSize: isMobile ? '19px' : '22px' }}>{METODE_ICON[m]}</span>
+                    <span style={{ ...s.metodeLabel, fontSize: isMobile ? '13.5px' : '14px' }}>{m}</span>
                     {metode === m && <span style={s.metodeCheck}>✓</span>}
                   </button>
                 ))}
@@ -181,11 +197,11 @@ function FidyahForm() {
           {/* Konfirmasi */}
           {step === 'konfirmasi' && metode && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Konfirmasi Transaksi</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Konfirmasi Transaksi</h2>
                 <p style={s.cardSub}>Periksa kembali sebelum menyimpan</p>
               </div>
-              <div style={s.cardBody}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
                 <div style={s.konfirmasiList}>
                   {[
                     { label: 'Muzakki',      value: muzakkiNama },
@@ -201,7 +217,7 @@ function FidyahForm() {
                   ))}
                   <div style={{ ...s.konfRow, borderBottom: 'none' }}>
                     <span style={s.konfLabel}>Total Fidyah</span>
-                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: '18px' }}>
+                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: isMobile ? '16px' : '18px' }}>
                       {formatRupiah(totalFidyah)}
                     </span>
                   </div>
@@ -217,15 +233,15 @@ function FidyahForm() {
           {stepError && <div style={s.errorBox}>⚠ {stepError}</div>}
 
           {step !== 'konfirmasi' && (
-            <div style={s.navRow}>
-              <button onClick={handleBack} style={s.navBackBtn}>← Kembali</button>
+            <div style={{ ...s.navRow, flexDirection: isMobile ? 'column' : 'row' }}>
+              <button onClick={handleBack} style={{ ...s.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
               <button onClick={handleNext} style={s.navNextBtn}>
                 {step === 'metode' ? 'Lihat Ringkasan →' : 'Lanjut →'}
               </button>
             </div>
           )}
           {step === 'konfirmasi' && (
-            <button onClick={handleBack} style={s.navBackBtn}>← Kembali</button>
+            <button onClick={handleBack} style={{ ...s.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
           )}
         </div>
       </main>
@@ -261,7 +277,7 @@ function FidyahForm() {
 
 export default function FidyahPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div style={{ padding: '24px' }}>Loading...</div>}>
       <FidyahForm />
     </Suspense>
   )
@@ -269,36 +285,36 @@ export default function FidyahPage() {
 
 const s: Record<string, React.CSSProperties> = {
   shell: { display: 'flex', minHeight: '100vh', background: '#F8F4ED', fontFamily: "'Plus Jakarta Sans', sans-serif" },
-  main: { marginLeft: '220px', flex: 1, padding: '32px 36px' },
+  main: { flex: 1 },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #EDE8E0' },
-  headerTitle: { fontSize: '26px', fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px', marginBottom: '4px' },
+  headerTitle: { fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px', marginBottom: '4px' },
   headerSub: { fontSize: '13px', color: '#A8A29E' },
   progressWrap: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' },
   progressTrack: { flex: 1, height: '6px', background: '#EDE8E0', borderRadius: '99px', overflow: 'hidden' },
   progressFill: { height: '100%', background: 'linear-gradient(90deg, #2D7A50, #4CAF7D)', borderRadius: '99px', transition: 'width 0.3s ease' },
   progressLabel: { fontSize: '12px', fontWeight: 600, color: '#A8A29E', textTransform: 'capitalize' },
-  formWrap: { maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '16px' },
+  formWrap: { display: 'flex', flexDirection: 'column', gap: '16px' },
   card: { background: '#fff', borderRadius: '16px', border: '1px solid #EDE8E0' },
-  cardHeader: { padding: '20px 24px 0' },
-  cardTitle: { fontSize: '17px', fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
+  cardHeader: {},
+  cardTitle: { fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
   cardSub: { fontSize: '13px', color: '#A8A29E', marginBottom: '20px' },
-  cardBody: { padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: '14px' },
-  infoBox: { background: '#F8F4ED', borderRadius: '10px', padding: '14px', border: '1px solid #EDE8E0' },
-  infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
+  cardBody: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  infoBox: { background: '#F8F4ED', borderRadius: '10px', border: '1px solid #EDE8E0' },
+  infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr' },
   infoLabel: { fontSize: '10px', fontWeight: 700, color: '#A8A29E', letterSpacing: '0.3px', textTransform: 'uppercase', marginBottom: '4px' },
-  infoValue: { fontSize: '15px', fontWeight: 700, color: '#1C1917' },
+  infoValue: { fontWeight: 700, color: '#1C1917' },
   field: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { fontSize: '13px', fontWeight: 600, color: '#44403C' },
-  input: { width: '100%', padding: '11px 14px', fontSize: '14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
-  hasilBox: { background: '#F0F7F3', borderRadius: '10px', padding: '16px', border: '1.5px solid #2D7A50', display: 'flex', flexDirection: 'column', gap: '10px' },
+  input: { width: '100%', padding: '11px 14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
+  hasilBox: { background: '#F0F7F3', borderRadius: '10px', border: '1.5px solid #2D7A50', display: 'flex', flexDirection: 'column', gap: '10px' },
   hasilTitle: { fontSize: '13px', fontWeight: 700, color: '#1A4731' },
-  hasilRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  hasilRow: { display: 'flex', justifyContent: 'space-between' },
   hasilRowLabel: { fontSize: '13px', color: '#57534E' },
-  hasilRowValue: { fontSize: '20px', fontWeight: 700, color: '#2D7A50' },
-  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
+  hasilRowValue: { fontWeight: 700, color: '#2D7A50' },
+  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
   metodeBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
-  metodeIcon: { fontSize: '22px' },
-  metodeLabel: { flex: 1, fontSize: '14px', fontWeight: 600, color: '#1C1917', textAlign: 'left' },
+  metodeIcon: {},
+  metodeLabel: { flex: 1, fontWeight: 600, color: '#1C1917', textAlign: 'left' },
   metodeCheck: { fontSize: '14px', color: '#2D7A50', fontWeight: 700 },
   konfirmasiList: { display: 'flex', flexDirection: 'column' },
   konfRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #F5F0E8' },

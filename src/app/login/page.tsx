@@ -174,7 +174,7 @@ export default function LoginPage() {
             flexWrap: 'wrap',
             gap: isMobile ? '16px' : '12px',
           }}>
-            {['Zakat Mal', 'Zakat Fitrah', 'Infaq'].map((item) => (
+            {['Zakat Mal', 'Zakat Fitrah', 'Infaq', 'Fidyah'].map((item) => (
               <div key={item} style={styles.statItem}>
                 <span style={styles.statLabel}>{item}</span>
                 <span style={styles.statDot} />

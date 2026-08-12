@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
 
@@ -21,9 +21,9 @@ function formatTanggal(iso: string) {
 export default function MuzakkiPage() {
   const supabase = createClient()
   const [data, setData] = useState<Muzakki[]>([])
-  const [filtered, setFiltered] = useState<Muzakki[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
 
   // Modal state
   const [showModal, setShowModal] = useState(false)
@@ -31,45 +31,62 @@ export default function MuzakkiPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   async function fetchData() {
     setLoading(true)
     const { data: rows } = await supabase
       .from('muzakki')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('nama', { ascending: true })
     setData(rows ?? [])
-    setFiltered(rows ?? [])
     setLoading(false)
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch awal saat mount, disengaja
   useEffect(() => { fetchData() }, [])
 
-  useEffect(() => {
+  const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    setFiltered(
-      data.filter(m =>
-        m.nama.toLowerCase().includes(q) ||
-        (m.nomor_hp ?? '').includes(q) ||
-        (m.alamat ?? '').toLowerCase().includes(q)
-      )
+    return data.filter(m =>
+      m.nama.toLowerCase().includes(q) ||
+      (m.nomor_hp ?? '').includes(q) ||
+      (m.alamat ?? '').toLowerCase().includes(q)
     )
-  }, [search, data])
+  }, [data, search])
 
-  const handleSave = async () => {
-    if (!form.nama.trim()) { setError('Nama wajib diisi.'); return }
-    setSaving(true)
-    setError('')
-    const { error: err } = await supabase.from('muzakki').insert({
-      nama: form.nama.trim(),
-      nomor_hp: form.nomor_hp.trim() || null,
-      alamat: form.alamat.trim() || null,
-    })
-    setSaving(false)
-    if (err) { setError('Gagal menyimpan. Coba lagi.'); return }
-    setShowModal(false)
-    setForm({ nama: '', nomor_hp: '', alamat: '' })
-    fetchData()
-  }
+const handleSave = async () => {
+  if (!form.nama.trim()) { setError('Nama wajib diisi.'); return }
+  setSaving(true)
+  setError('')
+
+  // 1. Ambil user ID & lembaga_id dari profil_amil
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profil } = await supabase
+    .from('profil_amil')
+    .select('lembaga_id')
+    .eq('id', user!.id)
+    .single()
+
+  // 2. Insert muzakki beserta lembaga_id
+  const { error: err } = await supabase.from('muzakki').insert({
+    nama: form.nama.trim(),
+    nomor_hp: form.nomor_hp.trim() || null,
+    alamat: form.alamat.trim() || null,
+    lembaga_id: profil?.lembaga_id ?? null, // <-- Ditambahkan di sini
+  })
+
+  setSaving(false)
+  if (err) { setError('Gagal menyimpan. Coba lagi.'); return }
+  setShowModal(false)
+  setForm({ nama: '', nomor_hp: '', alamat: '' })
+  fetchData()
+}
 
   const handleCloseModal = () => {
     setShowModal(false)
@@ -80,14 +97,27 @@ export default function MuzakkiPage() {
   return (
     <div style={s.shell}>
       <Sidebar />
-      <main style={s.main}>
+      <main style={{
+        ...s.main,
+        marginLeft: isMobile ? 0 : '220px',
+        padding: isMobile ? '64px 16px 20px' : '32px 36px',
+      }}>
         {/* Header */}
-        <div style={s.header}>
+        <div style={{
+          ...s.header,
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'flex-start',
+          gap: isMobile ? '14px' : '0',
+        }}>
           <div>
             <h1 style={s.headerTitle}>Muzakki</h1>
             <p style={s.headerSub}>Daftar pembayar zakat yang terdaftar</p>
           </div>
-          <button onClick={() => setShowModal(true)} style={s.addBtn}>
+          <button onClick={() => setShowModal(true)} style={{
+            ...s.addBtn,
+            width: isMobile ? '100%' : 'auto',
+            justifyContent: 'center',
+          }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M8 3v10M3 8h10" stroke="white" strokeWidth="2" strokeLinecap="round"/>
             </svg>
@@ -113,14 +143,16 @@ export default function MuzakkiPage() {
           )}
         </div>
 
-        {/* Table */}
-        <div style={s.tableCard}>
-          {loading ? (
+        {/* Table / Card List */}
+        {loading ? (
+          <div style={s.tableCard}>
             <div style={s.centerState}>
               <div style={s.spinner} />
               <p style={s.stateText}>Memuat data...</p>
             </div>
-          ) : filtered.length === 0 ? (
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={s.tableCard}>
             <div style={s.centerState}>
               <p style={s.emptyIcon}>{search ? '🔍' : '👤'}</p>
               <p style={s.stateTitle}>
@@ -132,13 +164,50 @@ export default function MuzakkiPage() {
                   : 'Klik "Tambah Muzakki" untuk mendaftarkan pembayar zakat pertama.'}
               </p>
             </div>
-          ) : (
-            <>
-              <div style={s.tableInfo}>
-                <span style={s.tableCount}>
-                  {filtered.length} muzakki{search ? ` ditemukan` : ' terdaftar'}
-                </span>
+          </div>
+        ) : isMobile ? (
+          /* Card List View — Mobile */
+          <div style={s.mobileListContainer}>
+            <p style={s.tableCountMobile}>
+              {filtered.length} muzakki{search ? ' ditemukan' : ' terdaftar'}
+            </p>
+            {filtered.map(m => (
+              <div key={m.id} style={s.mobileCard}>
+                <div style={s.mobileCardHeader}>
+                  <span style={s.namaText}>{m.nama}</span>
+                  <span style={s.mobileTimeText}>{formatTanggal(m.created_at)}</span>
+                </div>
+                <div style={s.mobileCardBody}>
+                  <div>
+                    <p style={s.mobileLabelText}>Nomor HP</p>
+                    <p style={s.mobileValueText}>
+                      {m.nomor_hp ? (
+                        <a href={`tel:${m.nomor_hp}`} style={s.hpLink}>
+                          {m.nomor_hp}
+                        </a>
+                      ) : (
+                        <span style={s.emptyCell}>—</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                {m.alamat && (
+                  <div style={s.mobileCardFooter}>
+                    <p style={s.mobileFooterText}>📍 {m.alamat}</p>
+                  </div>
+                )}
               </div>
+            ))}
+          </div>
+        ) : (
+          /* Tabel — Desktop */
+          <div style={s.tableCard}>
+            <div style={s.tableInfo}>
+              <span style={s.tableCount}>
+                {filtered.length} muzakki{search ? ' ditemukan' : ' terdaftar'}
+              </span>
+            </div>
+            <div style={s.tableScrollWrap}>
               <table style={s.table}>
                 <thead>
                   <tr>
@@ -169,15 +238,22 @@ export default function MuzakkiPage() {
                   ))}
                 </tbody>
               </table>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Modal Tambah Muzakki */}
       {showModal && (
         <div style={s.overlay} onClick={handleCloseModal}>
-          <div style={s.modal} onClick={e => e.stopPropagation()}>
+          <div
+            style={{
+              ...s.modal,
+              maxWidth: isMobile ? '100%' : '440px',
+              margin: isMobile ? '0' : undefined,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
             <div style={s.modalHeader}>
               <h2 style={s.modalTitle}>Tambah Muzakki</h2>
               <button onClick={handleCloseModal} style={s.closeBtn}>✕</button>
@@ -219,9 +295,29 @@ export default function MuzakkiPage() {
               {error && <p style={s.errorText}>⚠ {error}</p>}
             </div>
 
-            <div style={s.modalFooter}>
-              <button onClick={handleCloseModal} style={s.cancelBtn}>Batal</button>
-              <button onClick={handleSave} disabled={saving} style={s.saveBtn}>
+            <div
+              style={{
+                ...s.modalFooter,
+                flexDirection: isMobile ? 'column-reverse' : 'row',
+              }}
+            >
+              <button
+                onClick={handleCloseModal}
+                style={{
+                  ...s.cancelBtn,
+                  width: isMobile ? '100%' : 'auto',
+                }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  ...s.saveBtn,
+                  width: isMobile ? '100%' : 'auto',
+                }}
+              >
                 {saving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
@@ -238,17 +334,18 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: '100vh',
     background: '#F8F4ED',
     fontFamily: "'Plus Jakarta Sans', sans-serif",
+    overflowX: 'hidden',
   },
   main: {
-    marginLeft: '220px',
     flex: 1,
-    padding: '32px 36px',
-    maxWidth: '1100px',
+    boxSizing: 'border-box',
+    minWidth: 0,
+    maxWidth: '100%',
+    overflowX: 'hidden',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: '24px',
     paddingBottom: '24px',
     borderBottom: '1px solid #EDE8E0',
@@ -299,6 +396,7 @@ const s: Record<string, React.CSSProperties> = {
     outline: 'none',
     fontFamily: 'inherit',
     color: '#1C1917',
+    boxSizing: 'border-box',
   },
   clearBtn: {
     position: 'absolute',
@@ -327,10 +425,15 @@ const s: Record<string, React.CSSProperties> = {
     color: '#A8A29E',
     letterSpacing: '0.3px',
   },
+  tableScrollWrap: {
+    overflowX: 'auto',
+    WebkitOverflowScrolling: 'touch',
+  },
   table: {
     width: '100%',
     borderCollapse: 'collapse',
     fontSize: '13px',
+    minWidth: '600px',
   },
   th: {
     padding: '12px 16px',
@@ -386,6 +489,65 @@ const s: Record<string, React.CSSProperties> = {
   stateTitle: { fontSize: '15px', fontWeight: 600, color: '#57534E' },
   stateText: { fontSize: '13px', color: '#A8A29E' },
 
+  /* Mobile card list */
+  mobileListContainer: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '10px',
+  },
+  tableCountMobile: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#A8A29E',
+    marginBottom: '2px',
+  },
+  mobileCard: {
+    background: '#fff',
+    border: '1px solid #EDE8E0',
+    borderRadius: '12px',
+    padding: '14px 16px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '10px',
+  },
+  mobileCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid #F5F0E8',
+    paddingBottom: '8px',
+  },
+  mobileCardBody: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  mobileCardFooter: {
+    borderTop: '1px solid #F5F0E8',
+    paddingTop: '8px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '3px',
+  },
+  mobileFooterText: {
+    fontSize: '12px',
+    color: '#78716C',
+  },
+  mobileLabelText: {
+    fontSize: '11px',
+    color: '#A8A29E',
+    marginBottom: '2px',
+  },
+  mobileValueText: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#1C1917',
+  },
+  mobileTimeText: {
+    fontSize: '11px',
+    color: '#78716C',
+  },
+
   // Modal
   overlay: {
     position: 'fixed',
@@ -395,14 +557,15 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 100,
+    padding: '0',
   },
   modal: {
     background: '#fff',
     borderRadius: '16px',
     width: '100%',
-    maxWidth: '440px',
     boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
     overflow: 'hidden',
+    maxHeight: '100vh',
   },
   modalHeader: {
     display: 'flex',
@@ -429,6 +592,8 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '16px',
+    maxHeight: '60vh',
+    overflowY: 'auto',
   },
   field: {
     display: 'flex',
@@ -452,6 +617,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: 'inherit',
     color: '#1C1917',
     background: '#FAFAF9',
+    boxSizing: 'border-box',
   },
   textarea: {
     padding: '10px 12px',
@@ -463,6 +629,7 @@ const s: Record<string, React.CSSProperties> = {
     color: '#1C1917',
     background: '#FAFAF9',
     resize: 'vertical' as const,
+    boxSizing: 'border-box',
   },
   errorText: {
     fontSize: '13px',

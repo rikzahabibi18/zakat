@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
 
@@ -44,7 +44,6 @@ export default function MustahikPage() {
   const supabase = createClient()
 
   const [data, setData] = useState<Mustahik[]>([])
-  const [filtered, setFiltered] = useState<Mustahik[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterGolongan, setFilterGolongan] = useState('Semua')
@@ -69,13 +68,13 @@ export default function MustahikPage() {
       .order('golongan', { ascending: true })
       .order('nama', { ascending: true })
     setData(rows ?? [])
-    setFiltered(rows ?? [])
     setLoading(false)
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch awal saat mount, disengaja
   useEffect(() => { fetchData() }, [])
 
-  useEffect(() => {
+  const filtered = useMemo(() => {
     let result = data
     if (search) {
       const q = search.toLowerCase()
@@ -88,8 +87,8 @@ export default function MustahikPage() {
     if (filterGolongan !== 'Semua') {
       result = result.filter(m => m.golongan === filterGolongan)
     }
-    setFiltered(result)
-  }, [search, filterGolongan, data])
+    return result
+  }, [data, search, filterGolongan])
 
   async function handleSave() {
     if (!form.nama.trim()) { setError('Nama wajib diisi.'); return }
@@ -126,8 +125,6 @@ export default function MustahikPage() {
     acc[g.value] = data.filter(m => m.golongan === g.value).length
     return acc
   }, {} as Record<string, number>)
-
-  const hasScrollableTable = filtered.length > 0
 
   return (
     <div style={s.shell}>
@@ -414,7 +411,6 @@ const s: Record<string, React.CSSProperties> = {
   tableInfo: { padding: '12px 16px', borderBottom: '1px solid #F5F0E8', background: '#FAFAF9', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' },
   tableCount: { fontSize: '12px', fontWeight: 600, color: '#A8A29E' },
   tableInfoHint: { fontSize: '12px', color: '#C4BDB4' },
-  scrollHint: { fontSize: '10px', color: '#C4BDB4', fontWeight: 500, marginLeft: 'auto' },
   tableScrollWrap: { overflowX: 'auto', WebkitOverflowScrolling: 'touch' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '760px' },
   th: { padding: '12px 14px', textAlign: 'left' as const, fontSize: '11px', fontWeight: 700, color: '#A8A29E', letterSpacing: '0.5px', background: '#FAFAF9', borderBottom: '1px solid #EDE8E0' },

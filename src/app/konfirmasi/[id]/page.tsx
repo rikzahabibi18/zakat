@@ -98,7 +98,7 @@ export default function KonfirmasiPage() {
           <p style={s.successDesc}>Terima kasih, {transaksi?.muzakki?.nama}.</p>
           <p style={s.successDesc}>Zakat Anda telah tercatat. Semoga menjadi amal yang diterima.</p>
           <p style={s.ayat}>
-            "Ambillah zakat dari sebagian harta mereka, dengan zakat itu kamu membersihkan dan mensucikan mereka."
+            &ldquo;Ambillah zakat dari sebagian harta mereka, dengan zakat itu kamu membersihkan dan mensucikan mereka.&rdquo;
             <br /><strong>— QS. At-Taubah: 103</strong>
           </p>
         </div>
@@ -122,7 +122,7 @@ export default function KonfirmasiPage() {
 
         {/* Detail transaksi */}
         <div style={s.cardBody}>
-          <p style={s.greeting}>Assalamu'alaikum,</p>
+          <p style={s.greeting}>Assalamu&apos;alaikum,</p>
           <p style={s.muzakkiNama}>{transaksi?.muzakki?.nama}</p>
           <p style={s.instruction}>
             Silakan konfirmasi pembayaran zakat Anda di bawah ini.

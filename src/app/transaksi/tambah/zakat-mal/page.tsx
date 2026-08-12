@@ -33,10 +33,22 @@ function formatInput(val: string) {
 }
 function parseInput(val: string) { return Number(val.replace(/\D/g, '')) }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth < breakpoint) }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 function ZakatMalContent() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
+  const isMobile = useIsMobile()
 
   const muzakkiId = params.get('muzakkiId') ?? ''
   const muzakkiNama = params.get('muzakkiNama') ?? ''
@@ -59,7 +71,6 @@ function ZakatMalContent() {
   const nominalLangsungNum = parseInput(nominalLangsung)
   const wajib = hartaNum >= gold.nisab && gold.nisab > 0
 
-  // Nominal final yang akan disimpan
   const nominalFinal = opsi === 'hitung' ? zakatDariHarta : nominalLangsungNum
 
   const stepIndex = STEP_ORDER.indexOf(step)
@@ -89,12 +100,12 @@ function ZakatMalContent() {
     fetchGold()
   }, [])
 
-  // Reset input saat ganti opsi
-  useEffect(() => {
-    setTotalHarta('')
-    setNominalLangsung('')
-    setStepError('')
-  }, [opsi])
+  function handleOpsiChange(newOpsi: OpsiKalkulasi) {
+  setOpsi(newOpsi)
+  setTotalHarta('')
+  setNominalLangsung('')
+  setStepError('')
+}
 
   function handleNext() {
     if (step === 'kalkulasi') {
@@ -146,16 +157,19 @@ function ZakatMalContent() {
       setStruk({ id: insertedId, tanggal: tanggalNow })
     }
     return
-
   }
 
   return (
     <div style={s.shell}>
       <Sidebar />
-      <main style={s.main}>
+      <main style={{
+        ...s.main,
+        marginLeft: isMobile ? 0 : '220px',
+        padding: isMobile ? '84px 16px 24px' : '32px 36px',
+      }}>
         <div style={s.header}>
           <div>
-            <h1 style={s.headerTitle}>Zakat Mal</h1>
+            <h1 style={{ ...s.headerTitle, fontSize: isMobile ? '21px' : '26px' }}>Zakat Mal</h1>
             <p style={s.headerSub}>Muzakki: <strong>{muzakkiNama}</strong></p>
           </div>
         </div>
@@ -169,21 +183,21 @@ function ZakatMalContent() {
           </span>
         </div>
 
-        <div style={s.formWrap}>
+        <div style={{ ...s.formWrap, maxWidth: isMobile ? '100%' : '560px' }}>
 
           {/* ── Step: Kalkulasi ── */}
           {step === 'kalkulasi' && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Kalkulasi Zakat Mal</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Kalkulasi Zakat Mal</h2>
                 <p style={s.cardSub}>Pilih cara penghitungan zakat</p>
               </div>
-              <div style={s.cardBody}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
 
-                {/* Toggle opsi */}
-                <div style={s.opsiToggle}>
+                {/* Toggle opsi — jadi 1 kolom di mobile karena teksnya panjang */}
+                <div style={{ ...s.opsiToggle, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
                   <button
-                    onClick={() => setOpsi('hitung')}
+                    onClick={() => handleOpsiChange('hitung')}
                     style={{ ...s.opsiBtn, ...(opsi === 'hitung' ? s.opsiBtnActive : {}) }}
                   >
                     <span style={s.opsiIcon}>🏦</span>
@@ -193,7 +207,7 @@ function ZakatMalContent() {
                     </div>
                   </button>
                   <button
-                    onClick={() => setOpsi('langsung')}
+                    onClick={() => handleOpsiChange('langsung')}
                     style={{ ...s.opsiBtn, ...(opsi === 'langsung' ? s.opsiBtnActive : {}) }}
                   >
                     <span style={s.opsiIcon}>✏️</span>
@@ -204,8 +218,8 @@ function ZakatMalContent() {
                   </button>
                 </div>
 
-                {/* Info harga emas — tampil di kedua opsi */}
-                <div style={s.infoBox}>
+                {/* Info harga emas */}
+                <div style={{ ...s.infoBox, padding: isMobile ? '12px' : '14px' }}>
                   {gold.loading ? (
                     <div style={s.loadingRow}>
                       <div style={s.spinner} />
@@ -215,14 +229,14 @@ function ZakatMalContent() {
                     <p style={{ ...s.infoText, color: '#B91C1C' }}>⚠ {gold.error}</p>
                   ) : (
                     <>
-                      <div style={s.goldGrid}>
+                      <div style={{ ...s.goldGrid, gap: isMobile ? '10px' : '12px' }}>
                         <div>
                           <p style={s.goldLabel}>Harga Antam / gram</p>
-                          <p style={s.goldValue}>{formatRupiah(gold.hargaPerGram)}</p>
+                          <p style={{ ...s.goldValue, fontSize: isMobile ? '13.5px' : '16px' }}>{formatRupiah(gold.hargaPerGram)}</p>
                         </div>
                         <div>
                           <p style={s.goldLabel}>Nisab (85 gram)</p>
-                          <p style={{ ...s.goldValue, color: '#1A4731' }}>{formatRupiah(gold.nisab)}</p>
+                          <p style={{ ...s.goldValue, fontSize: isMobile ? '13.5px' : '16px', color: '#1A4731' }}>{formatRupiah(gold.nisab)}</p>
                         </div>
                       </div>
                       <p style={s.goldMeta}>Sumber: {gold.sumber}{gold.tanggal && ` · ${gold.tanggal}`}</p>
@@ -240,29 +254,29 @@ function ZakatMalContent() {
                         <input type="text" inputMode="numeric" placeholder="0"
                           value={totalHarta}
                           onChange={e => setTotalHarta(formatInput(e.target.value))}
-                          style={{ ...s.input, paddingLeft: '44px' }}
+                          style={{ ...s.input, paddingLeft: '44px', fontSize: isMobile ? '16px' : '14px' }}
                           disabled={gold.loading} />
                       </div>
                     </div>
 
                     {totalHarta && gold.nisab > 0 && (
-                      <div style={{ ...s.hasilBox, background: wajib ? '#F0F7F3' : '#FEF2F2', borderColor: wajib ? '#2D7A50' : '#FECACA' }}>
+                      <div style={{ ...s.hasilBox, padding: isMobile ? '14px' : '16px', background: wajib ? '#F0F7F3' : '#FEF2F2', borderColor: wajib ? '#2D7A50' : '#FECACA' }}>
                         {wajib ? (
                           <>
                             <p style={s.hasilStatus}>✅ Wajib Zakat Mal</p>
                             <p style={s.hasilDesc}>Total harta telah mencapai nisab</p>
-                            <div style={s.hasilRow}>
+                            <div style={{ ...s.hasilRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? '4px' : 0 }}>
                               <span style={s.hasilRowLabel}>Zakat yang harus dibayar (2.5%)</span>
-                              <span style={s.hasilRowValue}>{formatRupiah(zakatDariHarta)}</span>
+                              <span style={{ ...s.hasilRowValue, fontSize: isMobile ? '17px' : '20px' }}>{formatRupiah(zakatDariHarta)}</span>
                             </div>
                           </>
                         ) : (
                           <>
                             <p style={{ ...s.hasilStatus, color: '#B91C1C' }}>❌ Belum Wajib Zakat</p>
                             <p style={s.hasilDesc}>Harta belum mencapai nisab {formatRupiah(gold.nisab)}</p>
-                            <div style={s.hasilRow}>
+                            <div style={{ ...s.hasilRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? '4px' : 0 }}>
                               <span style={s.hasilRowLabel}>Kekurangan</span>
-                              <span style={{ ...s.hasilRowValue, color: '#B91C1C' }}>{formatRupiah(gold.nisab - hartaNum)}</span>
+                              <span style={{ ...s.hasilRowValue, fontSize: isMobile ? '17px' : '20px', color: '#B91C1C' }}>{formatRupiah(gold.nisab - hartaNum)}</span>
                             </div>
                           </>
                         )}
@@ -281,16 +295,16 @@ function ZakatMalContent() {
                         <input type="text" inputMode="numeric" placeholder="0"
                           value={nominalLangsung}
                           onChange={e => setNominalLangsung(formatInput(e.target.value))}
-                          style={{ ...s.input, paddingLeft: '44px' }}
-                          autoFocus />
+                          style={{ ...s.input, paddingLeft: '44px', fontSize: isMobile ? '16px' : '14px' }}
+                          autoFocus={!isMobile} />
                       </div>
                     </div>
                     {nominalLangsung && nominalLangsungNum > 0 && (
-                      <div style={{ ...s.hasilBox, background: '#F0F7F3', borderColor: '#2D7A50' }}>
+                      <div style={{ ...s.hasilBox, padding: isMobile ? '14px' : '16px', background: '#F0F7F3', borderColor: '#2D7A50' }}>
                         <p style={s.hasilStatus}>📝 Nominal yang akan dicatat</p>
-                        <div style={s.hasilRow}>
+                        <div style={{ ...s.hasilRow, flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? '4px' : 0 }}>
                           <span style={s.hasilRowLabel}>Zakat Mal</span>
-                          <span style={s.hasilRowValue}>{formatRupiah(nominalLangsungNum)}</span>
+                          <span style={{ ...s.hasilRowValue, fontSize: isMobile ? '17px' : '20px' }}>{formatRupiah(nominalLangsungNum)}</span>
                         </div>
                       </div>
                     )}
@@ -303,16 +317,16 @@ function ZakatMalContent() {
           {/* ── Step: Metode ── */}
           {step === 'metode' && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Metode Pembayaran</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Metode Pembayaran</h2>
                 <p style={s.cardSub}>Zakat Mal: <strong>{formatRupiah(nominalFinal)}</strong></p>
               </div>
-              <div style={s.cardBody}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
                 {METODE_LIST.map(m => (
                   <button key={m} onClick={() => setMetode(m)}
-                    style={{ ...s.metodeBtn, ...(metode === m ? s.metodeBtnActive : {}) }}>
-                    <span style={s.metodeIcon}>{METODE_ICON[m]}</span>
-                    <span style={s.metodeLabel}>{m}</span>
+                    style={{ ...s.metodeBtn, ...(metode === m ? s.metodeBtnActive : {}), padding: isMobile ? '12px 14px' : '14px 16px' }}>
+                    <span style={{ ...s.metodeIcon, fontSize: isMobile ? '19px' : '22px' }}>{METODE_ICON[m]}</span>
+                    <span style={{ ...s.metodeLabel, fontSize: isMobile ? '13.5px' : '14px' }}>{m}</span>
                     {metode === m && <span style={s.metodeCheck}>✓</span>}
                   </button>
                 ))}
@@ -323,11 +337,11 @@ function ZakatMalContent() {
           {/* ── Step: Konfirmasi ── */}
           {step === 'konfirmasi' && metode && (
             <div style={s.card}>
-              <div style={s.cardHeader}>
-                <h2 style={s.cardTitle}>Konfirmasi Transaksi</h2>
+              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Konfirmasi Transaksi</h2>
                 <p style={s.cardSub}>Periksa kembali sebelum menyimpan</p>
               </div>
-              <div style={s.cardBody}>
+              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
                 <div style={s.konfList}>
                   {[
                     { label: 'Muzakki',     value: muzakkiNama },
@@ -343,7 +357,7 @@ function ZakatMalContent() {
                   ))}
                   <div style={{ ...s.konfRow, borderBottom: 'none' }}>
                     <span style={s.konfLabel}>Nominal Zakat</span>
-                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: '20px' }}>
+                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: isMobile ? '17px' : '20px' }}>
                       {formatRupiah(nominalFinal)}
                     </span>
                   </div>
@@ -362,15 +376,15 @@ function ZakatMalContent() {
           {stepError && step !== 'konfirmasi' && <div style={s.errorBox}>⚠ {stepError}</div>}
 
           {step !== 'konfirmasi' && (
-            <div style={s.navRow}>
-              <button onClick={handleBack} style={s.navBackBtn}>← Kembali</button>
+            <div style={{ ...s.navRow, flexDirection: isMobile ? 'column' : 'row' }}>
+              <button onClick={handleBack} style={{ ...s.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
               <button onClick={handleNext} style={s.navNextBtn}>
                 {step === 'metode' ? 'Lihat Ringkasan →' : 'Lanjut →'}
               </button>
             </div>
           )}
           {step === 'konfirmasi' && (
-            <button onClick={handleBack} style={s.navBackBtn}>← Kembali</button>
+            <button onClick={handleBack} style={{ ...s.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
           )}
         </div>
       </main>
@@ -413,49 +427,49 @@ export default function ZakatMalPage() {
 
 const s: Record<string, React.CSSProperties> = {
   shell: { display: 'flex', minHeight: '100vh', background: '#F8F4ED', fontFamily: "'Plus Jakarta Sans', sans-serif" },
-  main: { marginLeft: '220px', flex: 1, padding: '32px 36px' },
+  main: { flex: 1 },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #EDE8E0' },
-  headerTitle: { fontSize: '26px', fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px', marginBottom: '4px' },
+  headerTitle: { fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px', marginBottom: '4px' },
   headerSub: { fontSize: '13px', color: '#A8A29E' },
   progressWrap: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' },
   progressTrack: { flex: 1, height: '6px', background: '#EDE8E0', borderRadius: '99px', overflow: 'hidden' },
   progressFill: { height: '100%', background: 'linear-gradient(90deg, #2D7A50, #4CAF7D)', borderRadius: '99px', transition: 'width 0.3s ease' },
   progressLabel: { fontSize: '12px', fontWeight: 600, color: '#A8A29E', textTransform: 'capitalize' },
-  formWrap: { maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '16px' },
+  formWrap: { display: 'flex', flexDirection: 'column', gap: '16px' },
   card: { background: '#fff', borderRadius: '16px', border: '1px solid #EDE8E0' },
-  cardHeader: { padding: '20px 24px 0' },
-  cardTitle: { fontSize: '17px', fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
+  cardHeader: {},
+  cardTitle: { fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
   cardSub: { fontSize: '13px', color: '#A8A29E', marginBottom: '20px' },
-  cardBody: { padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: '14px' },
-  opsiToggle: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
+  cardBody: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  opsiToggle: { display: 'grid', gap: '10px' },
   opsiBtn: { display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'all 0.15s' },
   opsiBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
   opsiIcon: { fontSize: '20px', flexShrink: 0, marginTop: '2px' },
   opsiLabel: { fontSize: '13px', fontWeight: 700, color: '#1C1917', marginBottom: '2px' },
   opsiDesc: { fontSize: '11px', color: '#78716C' },
-  infoBox: { background: '#F8F4ED', borderRadius: '10px', padding: '14px', border: '1px solid #EDE8E0' },
+  infoBox: { background: '#F8F4ED', borderRadius: '10px', border: '1px solid #EDE8E0' },
   loadingRow: { display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center', padding: '4px 0' },
   spinner: { width: '16px', height: '16px', border: '2px solid #EDE8E0', borderTop: '2px solid #2D7A50', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 },
   infoText: { fontSize: '13px', color: '#78716C' },
-  goldGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' },
+  goldGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', marginBottom: '8px' },
   goldLabel: { fontSize: '10px', fontWeight: 700, color: '#A8A29E', letterSpacing: '0.3px', textTransform: 'uppercase', marginBottom: '4px' },
-  goldValue: { fontSize: '16px', fontWeight: 700, color: '#1C1917' },
+  goldValue: { fontWeight: 700, color: '#1C1917' },
   goldMeta: { fontSize: '11px', color: '#C4BDB4', borderTop: '1px solid #EDE8E0', paddingTop: '8px', marginTop: '4px' },
   field: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { fontSize: '13px', fontWeight: 600, color: '#44403C' },
   inputWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
   prefix: { position: 'absolute', left: '14px', fontSize: '14px', fontWeight: 600, color: '#78716C', pointerEvents: 'none' },
-  input: { width: '100%', padding: '11px 14px', fontSize: '14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
-  hasilBox: { borderRadius: '10px', padding: '16px', border: '1.5px solid', display: 'flex', flexDirection: 'column', gap: '6px' },
+  input: { width: '100%', padding: '11px 14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
+  hasilBox: { borderRadius: '10px', border: '1.5px solid', display: 'flex', flexDirection: 'column', gap: '6px' },
   hasilStatus: { fontSize: '14px', fontWeight: 700, color: '#1A4731' },
   hasilDesc: { fontSize: '12px', color: '#78716C' },
-  hasilRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', paddingTop: '10px', borderTop: '1px solid rgba(0,0,0,0.06)' },
+  hasilRow: { display: 'flex', justifyContent: 'space-between', marginTop: '4px', paddingTop: '10px', borderTop: '1px solid rgba(0,0,0,0.06)' },
   hasilRowLabel: { fontSize: '13px', color: '#57534E' },
-  hasilRowValue: { fontSize: '20px', fontWeight: 700, color: '#2D7A50' },
-  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
+  hasilRowValue: { fontWeight: 700, color: '#2D7A50' },
+  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
   metodeBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
-  metodeIcon: { fontSize: '22px' },
-  metodeLabel: { flex: 1, fontSize: '14px', fontWeight: 600, color: '#1C1917', textAlign: 'left' },
+  metodeIcon: {},
+  metodeLabel: { flex: 1, fontWeight: 600, color: '#1C1917', textAlign: 'left' },
   metodeCheck: { fontSize: '14px', color: '#2D7A50', fontWeight: 700 },
   konfList: { display: 'flex', flexDirection: 'column' },
   konfRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #F5F0E8' },
