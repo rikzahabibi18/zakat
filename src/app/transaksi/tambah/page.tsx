@@ -5,7 +5,18 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
 
-interface Muzakki { id: number; nama: string }
+interface Muzakki {
+  id: number
+  nama: string
+  nomor_hp?: string | null
+  alamat?: string | null
+}
+
+interface MuzakkiBaru {
+  nama: string
+  nomor_hp: string
+  alamat: string
+}
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(false)
@@ -40,10 +51,16 @@ function TambahContent() {
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null)
   const [stepError, setStepError] = useState('')
 
+  // State modal tambah muzakki baru
+  const [showModal, setShowModal] = useState(false)
+  const [modalForm, setModalForm] = useState<MuzakkiBaru>({ nama: '', nomor_hp: '', alamat: '' })
+  const [savingModal, setSavingModal] = useState(false)
+  const [modalError, setModalError] = useState('')
+
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    supabase.from('muzakki').select('id, nama').order('nama')
+    supabase.from('muzakki').select('id, nama, nomor_hp, alamat').order('nama')
       .then(({ data }) => setMuzakkiList(data ?? []))
   }, [])
 
@@ -88,6 +105,58 @@ function TambahContent() {
     router.push(`/transaksi/tambah/${jenis}?${params.toString()}`)
   }
 
+  function handleBukaMmodal() {
+    setModalForm({
+      nama: muzakkiSearch.trim(), // pre-fill dari yang sudah diketik
+      nomor_hp: '',
+      alamat: '',
+    })
+    setModalError('')
+    setShowDropdown(false)
+    setShowModal(true)
+  }
+
+  function handleTutupModal() {
+    setShowModal(false)
+    setModalError('')
+  }
+
+  async function handleSimpanMuzakkiBaru() {
+    if (!modalForm.nama.trim()) { setModalError('Nama wajib diisi.'); return }
+
+    setSavingModal(true)
+    setModalError('')
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profil } = await supabase
+      .from('profil_amil').select('lembaga_id').eq('id', user!.id).single()
+
+    const { data, error } = await supabase.from('muzakki').insert({
+      nama: modalForm.nama.trim(),
+      nomor_hp: modalForm.nomor_hp.trim() || null,
+      alamat: modalForm.alamat.trim() || null,
+      lembaga_id: profil?.lembaga_id ?? null,
+    }).select('id, nama').single()
+
+    setSavingModal(false)
+
+    if (error || !data) {
+      setModalError('Gagal menyimpan. Coba lagi.')
+      return
+    }
+
+    // Tambahkan ke list lokal supaya konsisten
+    const muzakkiBaru: Muzakki = { id: data.id, nama: data.nama }
+    setMuzakkiList(prev => [...prev, muzakkiBaru].sort((a, b) => a.nama.localeCompare(b.nama)))
+
+    // Tutup modal, set terpilih, langsung lompat ke step 2
+    setShowModal(false)
+    setSelectedMuzakki(muzakkiBaru)
+    setMuzakkiSearch(muzakkiBaru.nama)
+    setStepError('')
+    setStep(2)
+  }
+
   const progress = step === 1 ? 50 : 100
 
   return (
@@ -101,7 +170,7 @@ function TambahContent() {
         <div style={{
           ...s.header,
           flexDirection: isMobile ? 'column' : 'row',
-          alignItems: isMobile ? 'flex-start' : 'flex-start',
+          alignItems: 'flex-start',
           gap: isMobile ? '12px' : 0,
         }}>
           <div>
@@ -145,8 +214,23 @@ function TambahContent() {
                   style={{ ...s.input, fontSize: isMobile ? '16px' : '14px' }}
                   autoFocus={!isMobile}
                 />
+
                 {selectedMuzakki && (
                   <div style={s.selectedBadge}>✓ {selectedMuzakki.nama} dipilih</div>
+                )}
+
+                {/* Tombol tambah muzakki baru — muncul kalau ada teks tapi belum ada yang dipilih */}
+                {muzakkiSearch.trim() && !selectedMuzakki && (
+                  <button
+                    onClick={handleBukaMmodal}
+                    style={s.tambahBaru}
+                  >
+                    <span style={s.tambahBaruIcon}>＋</span>
+                    <div>
+                      <p style={s.tambahBaruLabel}>Tambah &quot;{muzakkiSearch.trim()}&quot; sebagai muzakki baru</p>
+                      <p style={s.tambahBaruDesc}>Data akan tersimpan di halaman Muzakki</p>
+                    </div>
+                  </button>
                 )}
               </div>
             </div>
@@ -161,10 +245,10 @@ function TambahContent() {
               </div>
               <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
                 {([
-                  { key: 'zakat-mal',    icon: '🏦', label: 'Zakat Mal',     desc: 'Zakat atas harta, dihitung otomatis dari nisab emas' },
-                  { key: 'zakat-fitrah', icon: '🌙', label: 'Zakat Fitrah',   desc: 'Zakat jiwa, standar Jabodetabek Rp 45.000 atau 2.5 Kg/jiwa' },
-                  { key: 'fidyah',       icon: '🍚', label: 'Fidyah',         desc: 'Pengganti puasa, Rp 65.000 per hari' },
-                  { key: 'infaq',        icon: '🤲', label: 'Infaq/Sedekah',  desc: 'Sumbangan sukarela, nominal bebas' },
+                  { key: 'zakat-mal',    icon: '🏦', label: 'Zakat Mal',    desc: 'Zakat atas harta, dihitung otomatis dari nisab emas' },
+                  { key: 'zakat-fitrah', icon: '🌙', label: 'Zakat Fitrah',  desc: 'Zakat jiwa, standar Jabodetabek Rp 45.000 atau 2.5 Kg/jiwa' },
+                  { key: 'fidyah',       icon: '🍚', label: 'Fidyah',        desc: 'Pengganti puasa, Rp 65.000 per hari' },
+                  { key: 'infaq',        icon: '🤲', label: 'Infaq/Sedekah', desc: 'Sumbangan sukarela, nominal bebas' },
                 ] as const).map(item => (
                   <button key={item.key}
                     onClick={() => handlePilihJenis(item.key)}
@@ -200,28 +284,121 @@ function TambahContent() {
         </div>
       </main>
 
-      {showDropdown && muzakkiSearch && dropdownRect && step === 1 && (
-        <div style={{
-          ...s.dropdown,
-          position: 'fixed',
-          top: dropdownRect.bottom + 4,
-          left: dropdownRect.left,
-          width: dropdownRect.width,
-        }}>
-          {filtered.length === 0
-            ? <p style={s.dropdownEmpty}>Tidak ditemukan</p>
-            : filtered.map(m => (
-              <button key={m.id} style={s.dropdownItem}
-                onMouseDown={e => {
-                  e.preventDefault()
-                  setSelectedMuzakki(m)
-                  setMuzakkiSearch(m.nama)
-                  setShowDropdown(false)
-                }}>
-                {m.nama}
+{/* Dropdown search muzakki */}
+{showDropdown && muzakkiSearch && dropdownRect && step === 1 && (
+  <div style={{
+    ...s.dropdown,
+    position: 'fixed',
+    top: dropdownRect.bottom + 4,
+    left: dropdownRect.left,
+    width: dropdownRect.width,
+  }}>
+    {filtered.length === 0
+      ? <p style={s.dropdownEmpty}>Tidak ditemukan — gunakan tombol di bawah untuk menambahkan</p>
+      : filtered.map(m => (
+        <button key={m.id} style={s.dropdownItem}
+          onMouseDown={e => {
+            e.preventDefault()
+            setSelectedMuzakki(m)
+            setMuzakkiSearch(m.nama)
+            setShowDropdown(false)
+          }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+            <span style={{ fontWeight: 600, color: '#1C1917' }}>{m.nama}</span>
+            {(m.alamat || m.nomor_hp) && (
+              <span style={{ fontSize: '11.5px', color: '#78716C' }}>
+                {m.alamat ? `📍 ${m.alamat}` : ''} {m.alamat && m.nomor_hp ? '•' : ''} {m.nomor_hp ? `📱 ${m.nomor_hp}` : ''}
+              </span>
+            )}
+          </div>
+        </button>
+      ))
+    }
+  </div>
+)}
+
+      {/* Modal Tambah Muzakki Baru */}
+      {showModal && (
+        <div style={s.overlay} onClick={handleTutupModal}>
+          <div
+            style={{
+              ...s.modal,
+              maxWidth: isMobile ? '100%' : '440px',
+              margin: isMobile ? '0' : undefined,
+              maxHeight: isMobile ? '100dvh' : '90vh',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={s.modalHeader}>
+              <div>
+                <h2 style={s.modalTitle}>Tambah Muzakki Baru</h2>
+                <p style={s.modalSub}>Data akan tersimpan di halaman Muzakki</p>
+              </div>
+              <button onClick={handleTutupModal} style={s.modalCloseBtn}>✕</button>
+            </div>
+
+            <div style={s.modalBody}>
+              <div style={s.field}>
+                <label style={s.label}>Nama <span style={s.required}>*</span></label>
+                <input
+                  type="text"
+                  placeholder="Nama lengkap muzakki"
+                  value={modalForm.nama}
+                  onChange={e => setModalForm(f => ({ ...f, nama: e.target.value }))}
+                  style={{ ...s.input, fontSize: isMobile ? '16px' : '14px' }}
+                  autoFocus
+                />
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Nomor HP</label>
+                <input
+                  type="tel"
+                  placeholder="08xxxxxxxxxx (opsional)"
+                  value={modalForm.nomor_hp}
+                  onChange={e => setModalForm(f => ({ ...f, nomor_hp: e.target.value }))}
+                  style={{ ...s.input, fontSize: isMobile ? '16px' : '14px' }}
+                />
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Alamat</label>
+                <textarea
+                  placeholder="Alamat lengkap (opsional)"
+                  value={modalForm.alamat}
+                  onChange={e => setModalForm(f => ({ ...f, alamat: e.target.value }))}
+                  style={{ ...s.textarea, fontSize: isMobile ? '16px' : '14px' }}
+                  rows={2}
+                />
+              </div>
+
+              {modalError && <div style={s.errorBox}>⚠ {modalError}</div>}
+            </div>
+
+            <div style={{
+              ...s.modalFooter,
+              flexDirection: isMobile ? 'column-reverse' : 'row',
+            }}>
+              <button
+                onClick={handleTutupModal}
+                style={{ ...s.cancelBtn, width: isMobile ? '100%' : 'auto' }}
+              >
+                Batal
               </button>
-            ))
-          }
+              <button
+                onClick={handleSimpanMuzakkiBaru}
+                disabled={savingModal}
+                style={{
+                  ...s.navNextBtn,
+                  width: isMobile ? '100%' : 'auto',
+                  opacity: savingModal ? 0.6 : 1,
+                  cursor: savingModal ? 'not-allowed' : 'pointer',
+                  flex: 'none',
+                  padding: '11px 24px',
+                }}
+              >
+                {savingModal ? 'Menyimpan...' : '✓ Simpan & Lanjut →'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -254,7 +431,12 @@ const s: Record<string, React.CSSProperties> = {
   cardSub: { fontSize: '13px', color: '#A8A29E', marginBottom: '20px' },
   cardBody: { display: 'flex', flexDirection: 'column', gap: '12px' },
   input: { width: '100%', padding: '11px 14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
+  textarea: { width: '100%', padding: '11px 14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box', resize: 'vertical' as const },
   selectedBadge: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#2D7A50', fontWeight: 600, background: '#F0F7F3', padding: '8px 12px', borderRadius: '8px' },
+  tambahBaru: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '10px', border: '1.5px dashed #2D7A50', background: '#F0F7F3', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', width: '100%', transition: 'all 0.15s' },
+  tambahBaruIcon: { fontSize: '20px', color: '#2D7A50', fontWeight: 700, flexShrink: 0 },
+  tambahBaruLabel: { fontSize: '13px', fontWeight: 600, color: '#2D7A50', marginBottom: '2px' },
+  tambahBaruDesc: { fontSize: '11px', color: '#78716C' },
   dropdown: { background: '#fff', border: '1.5px solid #EDE8E0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 9999, maxHeight: '220px', overflowY: 'auto' },
   dropdownItem: { display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: '13.5px', color: '#1C1917', cursor: 'pointer', fontFamily: 'inherit', borderBottom: '1px solid #F5F0E8' },
   dropdownEmpty: { padding: '14px', fontSize: '13px', color: '#A8A29E', textAlign: 'center' },
@@ -268,4 +450,17 @@ const s: Record<string, React.CSSProperties> = {
   navRow: { display: 'flex', gap: '10px' },
   navBackBtn: { padding: '12px 20px', fontSize: '14px', fontWeight: 600, color: '#57534E', background: '#fff', border: '1.5px solid #EDE8E0', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' },
   navNextBtn: { flex: 1, padding: '12px 20px', fontSize: '14px', fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, #2D7A50, #1A4731)', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' },
+  // Modal
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '16px' },
+  modal: { background: '#fff', borderRadius: '16px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px', borderBottom: '1px solid #EDE8E0' },
+  modalTitle: { fontSize: '16px', fontWeight: 700, color: '#1C1917', marginBottom: '2px' },
+  modalSub: { fontSize: '12px', color: '#A8A29E' },
+  modalCloseBtn: { background: 'none', border: 'none', fontSize: '16px', color: '#A8A29E', cursor: 'pointer', padding: '4px', flexShrink: 0 },
+  modalBody: { padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' },
+  modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '16px 24px', borderTop: '1px solid #EDE8E0', background: '#FAFAF9' },
+  field: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  label: { fontSize: '13px', fontWeight: 600, color: '#44403C' },
+  required: { color: '#E11D48' },
+  cancelBtn: { padding: '10px 18px', fontSize: '13.5px', fontWeight: 600, color: '#57534E', background: '#fff', border: '1.5px solid #EDE8E0', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' },
 }
