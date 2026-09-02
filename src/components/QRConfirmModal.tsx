@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import QRCode from 'qrcode'
+import { shared } from '@/styles/shared'
+import { colors, font, gradient, radius } from '@/styles/tokens'
 
 interface Props {
   transaksiId: number
@@ -28,7 +30,7 @@ export default function QRConfirmModal({ transaksiId, muzakkiNama, nominal, onCl
     QRCode.toDataURL(konfirmasiUrl, {
       width: 240,
       margin: 2,
-      color: { dark: '#1A4731', light: '#FFFFFF' },
+      color: { dark: colors.primaryDark, light: colors.surface },
     }).then(url => setQrDataUrl(url))
 
     // Subscribe realtime — detect kalau muzakki sudah konfirmasi
@@ -54,8 +56,8 @@ export default function QRConfirmModal({ transaksiId, muzakkiNama, nominal, onCl
   }, [transaksiId])
 
   return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
+    <div style={{ ...shared.overlay, zIndex: 200, padding: '24px' }} onClick={onClose}>
+      <div style={{ ...shared.modal, borderRadius: radius.xxl, maxWidth: '380px' }} onClick={e => e.stopPropagation()}>
 
         {status === 'terkonfirmasi' ? (
           // State: sudah dikonfirmasi
@@ -68,9 +70,9 @@ export default function QRConfirmModal({ transaksiId, muzakkiNama, nominal, onCl
         ) : (
           // State: menunggu konfirmasi
           <>
-            <div style={s.header}>
+            <div style={{ ...shared.modalHeader, alignItems: 'center' }}>
               <p style={s.headerTitle}>Scan QR untuk Konfirmasi</p>
-              <button onClick={onClose} style={s.xBtn}>✕</button>
+              <button onClick={onClose} style={shared.closeBtn}>✕</button>
             </div>
 
             <div style={s.body}>
@@ -110,27 +112,23 @@ export default function QRConfirmModal({ transaksiId, muzakkiNama, nominal, onCl
 }
 
 const s: Record<string, React.CSSProperties> = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '24px' },
-  modal: { background: '#fff', borderRadius: '20px', width: '100%', maxWidth: '380px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #EDE8E0' },
-  headerTitle: { fontSize: '15px', fontWeight: 700, color: '#1C1917' },
-  xBtn: { background: 'none', border: 'none', fontSize: '16px', color: '#A8A29E', cursor: 'pointer', padding: '4px' },
+  headerTitle: { fontSize: font.lg, fontWeight: 700, color: colors.text },
   body: { padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' },
-  muzakkiNama: { fontSize: '16px', fontWeight: 700, color: '#1C1917', textAlign: 'center' },
-  nominal: { fontSize: '22px', fontWeight: 700, color: '#2D7A50', textAlign: 'center', marginTop: '-8px' },
-  qrWrap: { background: '#F8F4ED', borderRadius: '16px', padding: '16px', border: '1px solid #EDE8E0' },
+  muzakkiNama: { fontSize: font.xl, fontWeight: 700, color: colors.text, textAlign: 'center' },
+  nominal: { fontSize: '22px', fontWeight: 700, color: colors.primary, textAlign: 'center', marginTop: '-8px' },
+  qrWrap: { background: colors.bg, borderRadius: radius.xl, padding: '16px', border: `1px solid ${colors.border}` },
   qrImage: { width: '200px', height: '200px', display: 'block' },
-  qrLoading: { width: '200px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', color: '#A8A29E' },
+  qrLoading: { width: '200px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: font.base, color: colors.textDisabled },
   statusRow: { display: 'flex', alignItems: 'center', gap: '8px' },
-  statusDot: { width: '8px', height: '8px', borderRadius: '50%', background: '#C9A84C', animation: 'pulse 1.5s infinite' },
-  statusText: { fontSize: '13px', color: '#78716C' },
-  urlBox: { background: '#F8F4ED', borderRadius: '10px', padding: '12px 14px', width: '100%', boxSizing: 'border-box' },
-  urlLabel: { fontSize: '11px', fontWeight: 600, color: '#A8A29E', marginBottom: '4px' },
-  urlText: { fontSize: '12px', color: '#2D7A50', fontWeight: 600, wordBreak: 'break-all' },
-  hint: { fontSize: '12px', color: '#C4BDB4', textAlign: 'center', lineHeight: 1.6 },
+  statusDot: { width: '8px', height: '8px', borderRadius: '50%', background: colors.goldBorder, animation: 'pulse 1.5s infinite' },
+  statusText: { fontSize: font.base, color: colors.textSubtle },
+  urlBox: { background: colors.bg, borderRadius: radius.md, padding: '12px 14px', width: '100%', boxSizing: 'border-box' },
+  urlLabel: { fontSize: '11px', fontWeight: 600, color: colors.textDisabled, marginBottom: '4px' },
+  urlText: { fontSize: font.sm, color: colors.primary, fontWeight: 600, wordBreak: 'break-all' },
+  hint: { fontSize: font.sm, color: colors.textPlaceholder, textAlign: 'center', lineHeight: 1.6 },
   successWrap: { padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' },
-  successIcon: { width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg, #2D7A50, #1A4731)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 700 },
-  successTitle: { fontSize: '20px', fontWeight: 700, color: '#1A4731' },
-  successDesc: { fontSize: '14px', color: '#57534E', textAlign: 'center' },
-  closeBtn: { marginTop: '8px', padding: '12px 32px', fontSize: '14px', fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, #2D7A50, #1A4731)', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' },
+  successIcon: { width: '72px', height: '72px', borderRadius: '50%', background: gradient.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 700 },
+  successTitle: { fontSize: '20px', fontWeight: 700, color: colors.primaryDark },
+  successDesc: { fontSize: font.md, color: colors.textMuted, textAlign: 'center' },
+  closeBtn: { marginTop: '8px', padding: '12px 32px', fontSize: font.md, fontWeight: 700, color: '#fff', background: gradient.primary, border: 'none', borderRadius: radius.md, cursor: 'pointer', fontFamily: font.family },
 }

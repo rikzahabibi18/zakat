@@ -1,6 +1,8 @@
 'use client'
 
 import React from 'react'
+import { shared } from '@/styles/shared'
+import { colors, font, gradient, radius } from '@/styles/tokens'
 
 interface StrukData {
   transaksiId: number
@@ -134,8 +136,8 @@ export default function StrukModal({ data, onClose, onRedirect }: Props) {
   }
 
   return (
-    <div style={s.overlay}>
-      <div style={s.modal}>
+    <div style={{ ...shared.overlay, zIndex: 200, padding: '24px' }}>
+      <div style={{ ...shared.modal, borderRadius: radius.xxl, maxWidth: '400px' }}>
         <div style={s.header}>
           <div style={s.headerIcon}>✓</div>
           <h2 style={s.headerTitle}>Transaksi Berhasil!</h2>
@@ -144,30 +146,30 @@ export default function StrukModal({ data, onClose, onRedirect }: Props) {
 
         {/* Preview ringkasan */}
         <div style={s.preview}>
-          <div style={s.previewRow}>
+          <div style={{ ...shared.konfRow, padding: '10px 0' }}>
             <span style={s.previewLabel}>Muzakki</span>
-            <span style={s.previewValue}>{data.muzakkiNama}</span>
+            <span style={shared.konfValue}>{data.muzakkiNama}</span>
           </div>
-          <div style={s.previewRow}>
+          <div style={{ ...shared.konfRow, padding: '10px 0' }}>
             <span style={s.previewLabel}>Jenis</span>
-            <span style={s.previewValue}>{data.jenisZakat}</span>
+            <span style={shared.konfValue}>{data.jenisZakat}</span>
           </div>
-          <div style={s.previewRow}>
+          <div style={{ ...shared.konfRow, padding: '10px 0' }}>
             <span style={s.previewLabel}>Metode</span>
-            <span style={s.previewValue}>{data.metode}</span>
+            <span style={shared.konfValue}>{data.metode}</span>
           </div>
           {data.jumlahUang > 0 && (
-            <div style={{ ...s.previewRow, borderBottom: 'none' }}>
+            <div style={{ ...shared.konfRow, padding: '10px 0', borderBottom: 'none' }}>
               <span style={s.previewLabel}>Nominal</span>
-              <span style={{ ...s.previewValue, color: '#2D7A50', fontSize: '16px', fontWeight: 700 }}>
+              <span style={{ ...shared.konfValue, color: colors.primary, fontSize: '16px', fontWeight: 700 }}>
                 {formatRupiah(data.jumlahUang)}
               </span>
             </div>
           )}
           {data.jumlahBeras > 0 && (
-            <div style={{ ...s.previewRow, borderBottom: 'none' }}>
+            <div style={{ ...shared.konfRow, padding: '10px 0', borderBottom: 'none' }}>
               <span style={s.previewLabel}>Beras</span>
-              <span style={{ ...s.previewValue, color: '#92681A', fontSize: '16px', fontWeight: 700 }}>
+              <span style={{ ...shared.konfValue, color: colors.gold, fontSize: '16px', fontWeight: 700 }}>
                 {data.jumlahBeras} Kg
               </span>
             </div>
@@ -176,7 +178,7 @@ export default function StrukModal({ data, onClose, onRedirect }: Props) {
 
         {/* Actions */}
         <div style={s.actions}>
-          <button onClick={handleDownload} disabled={downloading} style={s.downloadBtn}>
+          <button onClick={handleDownload} disabled={downloading} style={{ ...shared.btnPrimary, padding: '13px' }}>
             {downloading ? '⏳ Menyiapkan PDF...' : '⬇ Unduh Struk PDF'}
           </button>
           <button onClick={handleSelesai} style={s.selesaiBtn}>
@@ -189,17 +191,12 @@ export default function StrukModal({ data, onClose, onRedirect }: Props) {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '24px' },
-  modal: { background: '#fff', borderRadius: '20px', width: '100%', maxWidth: '400px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' },
-  header: { background: 'linear-gradient(135deg, #2D7A50, #1A4731)', padding: '28px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' },
+  header: { background: gradient.primary, padding: '28px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' },
   headerIcon: { width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 700, marginBottom: '4px' },
   headerTitle: { fontSize: '18px', fontWeight: 700, color: '#fff', textAlign: 'center' },
-  headerSub: { fontSize: '13px', color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
+  headerSub: { fontSize: font.base, color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
   preview: { padding: '20px 24px', display: 'flex', flexDirection: 'column' },
-  previewRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #F5F0E8' },
-  previewLabel: { fontSize: '12px', fontWeight: 600, color: '#A8A29E', textTransform: 'uppercase', letterSpacing: '0.3px' },
-  previewValue: { fontSize: '14px', fontWeight: 600, color: '#1C1917' },
+  previewLabel: { fontSize: '12px', fontWeight: 600, color: colors.textDisabled, textTransform: 'uppercase', letterSpacing: '0.3px' },
   actions: { padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: '10px' },
-  downloadBtn: { width: '100%', padding: '13px', fontSize: '14px', fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, #2D7A50, #1A4731)', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' },
-  selesaiBtn: { width: '100%', padding: '11px', fontSize: '13.5px', fontWeight: 600, color: '#78716C', background: 'none', border: '1.5px solid #EDE8E0', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' },
+  selesaiBtn: { width: '100%', padding: '11px', fontSize: '13.5px', fontWeight: 600, color: colors.textSubtle, background: 'none', border: `1.5px solid ${colors.border}`, borderRadius: radius.md, cursor: 'pointer', fontFamily: font.family },
 }

@@ -6,16 +6,24 @@ import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
 import QRConfirmModal from '@/components/QRConfirmModal'
 import StrukModal from '@/components/StrukModal'
+import { shared } from '@/styles/shared'
+import { colors, font } from '@/styles/tokens'
 
 type Metode = 'Tunai' | 'Transfer Bank' | 'QRIS' | 'Beras'
 type Step = 'kalkulasi' | 'metode' | 'konfirmasi'
 type OpsiKalkulasi = 'jiwa' | 'nominal' | 'beras'
+type SatuanBeras = 'kg' | 'liter'
 
 const METODE_LIST: Metode[] = ['Tunai', 'Transfer Bank', 'QRIS', 'Beras']
 const METODE_ICON: Record<Metode, string> = { Tunai: '💵', 'Transfer Bank': '🏦', QRIS: '📱', Beras: '🌾' }
+
+// Konstanta BAZNAS
 const FITRAH_UANG = 45000
-const FITRAH_BERAS = 2.5
-const RATE_PER_KG = FITRAH_UANG / FITRAH_BERAS // 18000 per Kg
+const FITRAH_KG = 2.5
+const FITRAH_LITER = 3.5
+// Rate konversi ke Kg (base untuk semua kalkulasi uang)
+const RATE_PER_KG = FITRAH_UANG / FITRAH_KG       // 18.000 per Kg
+const LITER_TO_KG = FITRAH_KG / FITRAH_LITER       // ≈ 0.7143 Kg per Liter
 
 function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
@@ -57,24 +65,65 @@ function ZakatFitrahForm() {
   const [qrData, setQrData] = useState<{ id: number; nominal: string } | null>(null)
   const [struk, setStruk] = useState<{ id: number; tanggal: string } | null>(null)
 
-  // ── Kalkulasi final berdasarkan opsi ──
+  // Setting satuan dari lembaga
+  const [satuanBeras, setSatuanBeras] = useState<SatuanBeras>('kg')
+  const [loadingSatuan, setLoadingSatuan] = useState(true)
+
+  // Fetch satuan_beras dari lembaga saat mount
+  useEffect(() => {
+    async function fetchSatuan() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoadingSatuan(false); return }
+
+      const { data: profil } = await supabase
+        .from('profil_amil').select('lembaga_id').eq('id', user.id).single()
+
+      if (profil?.lembaga_id) {
+        const { data: lembaga } = await supabase
+          .from('lembaga').select('satuan_beras').eq('id', profil.lembaga_id).single()
+        if (lembaga?.satuan_beras) {
+          setSatuanBeras(lembaga.satuan_beras as SatuanBeras)
+        }
+      }
+      setLoadingSatuan(false)
+    }
+    fetchSatuan()
+  }, [])
+
+  // Label satuan yang dinamis
+  const satuanLabel = satuanBeras === 'kg' ? 'Kg' : 'Liter'
+  const fitrahPerJiwa = satuanBeras === 'kg' ? FITRAH_KG : FITRAH_LITER
+
+  // ── Semua kalkulasi dikonversi ke Kg dulu sebagai base ──
   const jiwaNum = Number(jumlahJiwa)
   const nominalNum = parseInput(inputNominal)
-  const berasNum = parseFloat(inputBeras) || 0
+  const berasInputNum = parseFloat(inputBeras) || 0
 
+  // Konversi input beras ke Kg (untuk kalkulasi uang)
+  const berasInputInKg = satuanBeras === 'kg'
+    ? berasInputNum
+    : berasInputNum * LITER_TO_KG
+
+  // Final values yang disimpan ke DB (selalu dalam Kg)
   const finalUang: number = (() => {
     if (opsi === 'jiwa')    return jiwaNum * FITRAH_UANG
     if (opsi === 'nominal') return nominalNum
-    if (opsi === 'beras')   return Math.round(berasNum * RATE_PER_KG)
+    if (opsi === 'beras')   return Math.round(berasInputInKg * RATE_PER_KG)
     return 0
   })()
 
-  const finalBeras: number = (() => {
-    if (opsi === 'jiwa')    return jiwaNum * FITRAH_BERAS
-    if (opsi === 'nominal') return parseFloat((nominalNum / RATE_PER_KG).toFixed(2))
-    if (opsi === 'beras')   return berasNum
+  // jumlah_beras di DB selalu dalam Kg
+  const finalBerasKg: number = (() => {
+    if (opsi === 'jiwa')    return jiwaNum * FITRAH_KG
+    if (opsi === 'nominal') return parseFloat((nominalNum / RATE_PER_KG).toFixed(3))
+    if (opsi === 'beras')   return parseFloat(berasInputInKg.toFixed(3))
     return 0
   })()
+
+  // Nilai yang ditampilkan ke user (dalam satuan lembaga)
+  const tampilBeras: number = satuanBeras === 'kg'
+    ? finalBerasKg
+    : parseFloat((finalBerasKg / LITER_TO_KG).toFixed(2))
 
   const STEP_ORDER: Step[] = ['kalkulasi', 'metode', 'konfirmasi']
   const stepIndex = STEP_ORDER.indexOf(step)
@@ -96,8 +145,8 @@ function ZakatFitrahForm() {
       if (opsi === 'nominal' && nominalNum < 1) {
         setStepError('Masukkan nominal zakat.'); return
       }
-      if (opsi === 'beras' && berasNum <= 0) {
-        setStepError('Masukkan jumlah beras (minimal 0.1 Kg).'); return
+      if (opsi === 'beras' && berasInputNum <= 0) {
+        setStepError(`Masukkan jumlah beras (minimal 0.1 ${satuanLabel}).`); return
       }
     }
     if (step === 'metode' && !metode) {
@@ -122,7 +171,6 @@ function ZakatFitrahForm() {
     const { data: profil } = await supabase
       .from('profil_amil').select('lembaga_id').eq('id', user!.id).single()
 
-    // Simpan keduanya — uang dan beras selalu ada (hasil konversi)
     const namaKategori = metode === 'Beras' ? 'Zakat Fitrah - Beras' : 'Zakat Fitrah - Uang'
     const { data: kategori } = await supabase
       .from('kategori_zakat').select('id').eq('nama_kategori', namaKategori).single()
@@ -131,8 +179,8 @@ function ZakatFitrahForm() {
       muzakki_id: Number(muzakkiId),
       kategori_id: kategori?.id ?? null,
       metode_pembayaran: metode,
-      jumlah_uang: finalUang,
-      jumlah_beras: finalBeras,
+      jumlah_uang: metode === 'Beras' ? 0 : finalUang,
+      jumlah_beras: metode === 'Beras' ? finalBerasKg : 0,
       amil_pencatat: user?.user_metadata?.nama ?? user?.email ?? null,
       lembaga_id: profil?.lembaga_id ?? null,
     }).select('id')
@@ -149,77 +197,107 @@ function ZakatFitrahForm() {
     }
   }
 
-  // Label ringkas untuk step metode & konfirmasi
   const labelKalkulasi = opsi === 'jiwa'
     ? `${jiwaNum} jiwa`
     : opsi === 'nominal'
       ? formatRupiah(nominalNum)
-      : `${berasNum} Kg beras`
+      : `${berasInputNum} ${satuanLabel} beras`
+
+  const cardPad = isMobile ? '16px 16px 0' : '20px 24px 0'
+  const bodyPad = isMobile ? '0 16px 16px' : '0 24px 24px'
+
+  if (loadingSatuan) {
+    return (
+      <div style={shared.shell}>
+        <Sidebar />
+        <main style={{ ...shared.main, marginLeft: isMobile ? 0 : '220px', padding: isMobile ? '84px 16px 24px' : '32px 36px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '32px 0', color: colors.textDisabled, fontSize: font.md }}>
+            <div style={shared.spinner} /> Memuat pengaturan lembaga...
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
-    <div style={s.shell}>
+    <div style={shared.shell}>
       <Sidebar />
       <main style={{
-        ...s.main,
+        ...shared.main,
         marginLeft: isMobile ? 0 : '220px',
         padding: isMobile ? '84px 16px 24px' : '32px 36px',
       }}>
-        <div style={s.header}>
+
+        {/* Header */}
+        <div style={shared.pageHeader}>
           <div>
-            <h1 style={{ ...s.headerTitle, fontSize: isMobile ? '21px' : '26px' }}>Zakat Fitrah</h1>
-            <p style={s.headerSub}>Muzakki: <strong>{muzakkiNama}</strong></p>
+            <h1 style={{ ...shared.headerTitle, fontSize: isMobile ? font.h2 : font.h1 }}>
+              Zakat Fitrah
+            </h1>
+            <p style={shared.headerSub}>Muzakki: <strong>{muzakkiNama}</strong></p>
           </div>
         </div>
 
-        <div style={s.progressWrap}>
-          <div style={s.progressTrack}>
-            <div style={{ ...s.progressFill, width: `${progress}%` }} />
+        {/* Progress */}
+        <div style={shared.progressWrap}>
+          <div style={shared.progressTrack}>
+            <div style={{ ...shared.progressFill, width: `${progress}%` }} />
           </div>
-          <span style={s.progressLabel}>{step === 'kalkulasi' ? 'Kalkulasi' : step === 'metode' ? 'Metode' : 'Konfirmasi'}</span>
+          <span style={shared.progressLabel}>
+            {step === 'kalkulasi' ? 'Kalkulasi' : step === 'metode' ? 'Metode' : 'Konfirmasi'}
+          </span>
         </div>
 
         <div style={{ ...s.formWrap, maxWidth: isMobile ? '100%' : '560px' }}>
 
           {/* ── Step: Kalkulasi ── */}
           {step === 'kalkulasi' && (
-            <div style={s.card}>
-              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
-                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Kalkulasi Zakat Fitrah</h2>
-                <p style={s.cardSub}>Standar Jabodetabek — Rp 45.000 atau 2.5 Kg per jiwa</p>
+            <div style={shared.cardOverflow}>
+              <div style={{ ...s.cardHeader, padding: cardPad }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : font.h3 }}>Kalkulasi Zakat Fitrah</h2>
+                <p style={s.cardSub}>
+                  Standar Jabodetabek — {formatRupiah(FITRAH_UANG)} atau {fitrahPerJiwa} {satuanLabel} per jiwa
+                </p>
               </div>
-              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
+              <div style={{ ...shared.cardBody, padding: bodyPad }}>
 
-                {/* Info rate */}
-                <div style={{ ...s.infoBox, padding: isMobile ? '12px' : '14px' }}>
-                  <div style={{ ...s.infoGrid, gap: isMobile ? '10px' : '12px' }}>
+                {/* Info rate — dinamis berdasarkan satuan */}
+                <div style={{ ...shared.infoBox, padding: isMobile ? '12px' : '14px' }}>
+                  <div style={{ ...shared.infoGrid, gap: isMobile ? '10px' : '12px' }}>
                     <div>
-                      <p style={s.infoLabel}>Standar Uang / jiwa</p>
-                      <p style={{ ...s.infoValue, fontSize: isMobile ? '13.5px' : '15px' }}>{formatRupiah(FITRAH_UANG)}</p>
+                      <p style={shared.infoLabel}>Standar Uang / jiwa</p>
+                      <p style={{ ...shared.infoValue, fontSize: isMobile ? '13.5px' : font.lg }}>{formatRupiah(FITRAH_UANG)}</p>
                     </div>
                     <div>
-                      <p style={s.infoLabel}>Standar Beras / jiwa</p>
-                      <p style={{ ...s.infoValue, fontSize: isMobile ? '13.5px' : '15px' }}>{FITRAH_BERAS} Kg</p>
+                      <p style={shared.infoLabel}>Standar Beras / jiwa</p>
+                      <p style={{ ...shared.infoValue, fontSize: isMobile ? '13.5px' : font.lg }}>{fitrahPerJiwa} {satuanLabel}</p>
                     </div>
+                  </div>
+                  {/* Badge satuan aktif */}
+                  <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${colors.border}` }}>
+                    <span style={{ ...shared.badge, ...shared.badgePrimary }}>
+                      {satuanBeras === 'kg' ? '⚖️ Satuan: Kilogram (Kg)' : '🪣 Satuan: Liter'}
+                    </span>
                   </div>
                 </div>
 
                 {/* Toggle 3 opsi */}
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '8px' }}>
                   {([
-                    { key: 'jiwa',    icon: '🧑‍👨‍👦', label: 'Hitung dari Jiwa',   desc: 'Input jumlah orang' },
-                    { key: 'nominal', icon: '💵',      label: 'Input Nominal',       desc: 'Input langsung rupiah' },
-                    { key: 'beras',   icon: '🌾',      label: 'Input Berat Beras',   desc: 'Input langsung Kg' },
+                    { key: 'jiwa',    icon: '🧑‍👨‍👦', label: 'Hitung dari Jiwa',         desc: 'Input jumlah orang' },
+                    { key: 'nominal', icon: '💵',      label: 'Input Nominal',            desc: 'Input langsung rupiah' },
+                    { key: 'beras',   icon: '🌾',      label: `Input ${satuanLabel} Beras`, desc: `Input langsung ${satuanLabel}` },
                   ] as const).map(o => (
                     <button key={o.key}
                       onClick={() => handleOpsiChange(o.key)}
                       style={{
-                        ...s.opsiBtn,
-                        ...(opsi === o.key ? s.opsiBtnActive : {}),
+                        ...shared.opsiBtn,
+                        ...(opsi === o.key ? shared.opsiBtnActive : {}),
                       }}>
-                      <span style={s.opsiIcon}>{o.icon}</span>
+                      <span style={shared.opsiIcon}>{o.icon}</span>
                       <div>
-                        <p style={s.opsiLabel}>{o.label}</p>
-                        <p style={s.opsiDesc}>{o.desc}</p>
+                        <p style={shared.opsiLabel}>{o.label}</p>
+                        <p style={shared.opsiDesc}>{o.desc}</p>
                       </div>
                     </button>
                   ))}
@@ -228,26 +306,26 @@ function ZakatFitrahForm() {
                 {/* ── Input Jiwa ── */}
                 {opsi === 'jiwa' && (
                   <>
-                    <div style={s.field}>
-                      <label style={s.label}>Jumlah Jiwa</label>
+                    <div style={shared.field}>
+                      <label style={shared.label}>Jumlah Jiwa</label>
                       <input type="number" min="1" placeholder="1"
                         value={jumlahJiwa}
                         onChange={e => setJumlahJiwa(e.target.value)}
-                        style={{ ...s.input, fontSize: isMobile ? '16px' : '14px' }}
+                        style={{ ...shared.input, fontSize: isMobile ? font.xl : font.md }}
                         autoFocus={!isMobile} />
                     </div>
                     {jumlahJiwa && jiwaNum > 0 && (
-                      <div style={{ ...s.hasilBox, padding: isMobile ? '14px' : '16px' }}>
-                        <p style={s.hasilTitle}>📊 Hasil untuk {jiwaNum} jiwa</p>
-                        <div style={{ ...s.hasilGrid, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '12px' : 0 }}>
-                          <div style={s.hasilItem}>
-                            <p style={s.hasilItemLabel}>Jika bayar uang</p>
-                            <p style={{ ...s.hasilItemValue, fontSize: isMobile ? '16px' : '18px' }}>{formatRupiah(finalUang)}</p>
+                      <div style={{ ...shared.hasilBox, padding: isMobile ? '14px' : '16px' }}>
+                        <p style={shared.hasilTitle}>📊 Hasil untuk {jiwaNum} jiwa</p>
+                        <div style={{ ...shared.hasilGrid, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '12px' : 0 }}>
+                          <div style={shared.hasilItem}>
+                            <p style={shared.hasilItemLabel}>Jika bayar uang</p>
+                            <p style={{ ...shared.hasilItemValue, fontSize: isMobile ? font.xl : font.h2 }}>{formatRupiah(finalUang)}</p>
                           </div>
-                          {isMobile ? <div style={s.hasilDividerH} /> : <div style={s.hasilDivider} />}
-                          <div style={s.hasilItem}>
-                            <p style={s.hasilItemLabel}>Jika bayar beras</p>
-                            <p style={{ ...s.hasilItemValue, fontSize: isMobile ? '16px' : '18px' }}>{finalBeras} Kg</p>
+                          {isMobile ? <div style={shared.hasilDividerH} /> : <div style={shared.hasilDivider} />}
+                          <div style={shared.hasilItem}>
+                            <p style={shared.hasilItemLabel}>Jika bayar beras</p>
+                            <p style={{ ...shared.hasilItemValue, fontSize: isMobile ? font.xl : font.h2 }}>{tampilBeras} {satuanLabel}</p>
                           </div>
                         </div>
                       </div>
@@ -258,29 +336,29 @@ function ZakatFitrahForm() {
                 {/* ── Input Nominal ── */}
                 {opsi === 'nominal' && (
                   <>
-                    <div style={s.field}>
-                      <label style={s.label}>Nominal Zakat (Rp)</label>
-                      <div style={s.inputWrap}>
-                        <span style={s.prefix}>Rp</span>
+                    <div style={shared.field}>
+                      <label style={shared.label}>Nominal Zakat (Rp)</label>
+                      <div style={shared.inputWrap}>
+                        <span style={shared.prefix}>Rp</span>
                         <input type="text" inputMode="numeric" placeholder="0"
                           value={inputNominal}
                           onChange={e => setInputNominal(formatInput(e.target.value))}
-                          style={{ ...s.input, paddingLeft: '44px', fontSize: isMobile ? '16px' : '14px' }}
+                          style={{ ...shared.input, paddingLeft: '44px', fontSize: isMobile ? font.xl : font.md }}
                           autoFocus={!isMobile} />
                       </div>
                     </div>
                     {nominalNum > 0 && (
-                      <div style={{ ...s.hasilBox, padding: isMobile ? '14px' : '16px' }}>
-                        <p style={s.hasilTitle}>📊 Setara dengan</p>
-                        <div style={{ ...s.hasilGrid, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '12px' : 0 }}>
-                          <div style={s.hasilItem}>
-                            <p style={s.hasilItemLabel}>Nominal uang</p>
-                            <p style={{ ...s.hasilItemValue, fontSize: isMobile ? '16px' : '18px' }}>{formatRupiah(finalUang)}</p>
+                      <div style={{ ...shared.hasilBox, padding: isMobile ? '14px' : '16px' }}>
+                        <p style={shared.hasilTitle}>📊 Setara dengan</p>
+                        <div style={{ ...shared.hasilGrid, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '12px' : 0 }}>
+                          <div style={shared.hasilItem}>
+                            <p style={shared.hasilItemLabel}>Nominal uang</p>
+                            <p style={{ ...shared.hasilItemValue, fontSize: isMobile ? font.xl : font.h2 }}>{formatRupiah(finalUang)}</p>
                           </div>
-                          {isMobile ? <div style={s.hasilDividerH} /> : <div style={s.hasilDivider} />}
-                          <div style={s.hasilItem}>
-                            <p style={s.hasilItemLabel}>Setara beras</p>
-                            <p style={{ ...s.hasilItemValue, fontSize: isMobile ? '16px' : '18px' }}>{finalBeras} Kg</p>
+                          {isMobile ? <div style={shared.hasilDividerH} /> : <div style={shared.hasilDivider} />}
+                          <div style={shared.hasilItem}>
+                            <p style={shared.hasilItemLabel}>Setara beras</p>
+                            <p style={{ ...shared.hasilItemValue, fontSize: isMobile ? font.xl : font.h2 }}>{tampilBeras} {satuanLabel}</p>
                           </div>
                         </div>
                       </div>
@@ -291,31 +369,37 @@ function ZakatFitrahForm() {
                 {/* ── Input Beras ── */}
                 {opsi === 'beras' && (
                   <>
-                    <div style={s.field}>
-                      <label style={s.label}>Berat Beras (Kg)</label>
-                      <div style={s.inputWrap}>
+                    <div style={shared.field}>
+                      <label style={shared.label}>Jumlah Beras ({satuanLabel})</label>
+                      <div style={shared.inputWrap}>
                         <input type="number" min="0.1" step="0.1" placeholder="0.0"
                           value={inputBeras}
                           onChange={e => setInputBeras(e.target.value)}
-                          style={{ ...s.input, paddingRight: '50px', fontSize: isMobile ? '16px' : '14px' }}
+                          style={{ ...shared.input, paddingRight: satuanBeras === 'liter' ? '60px' : '50px', fontSize: isMobile ? font.xl : font.md }}
                           autoFocus={!isMobile} />
-                        <span style={s.suffix}>Kg</span>
+                        <span style={shared.suffix}>{satuanLabel}</span>
                       </div>
                     </div>
-                    {berasNum > 0 && (
-                      <div style={{ ...s.hasilBox, padding: isMobile ? '14px' : '16px' }}>
-                        <p style={s.hasilTitle}>📊 Setara dengan</p>
-                        <div style={{ ...s.hasilGrid, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '12px' : 0 }}>
-                          <div style={s.hasilItem}>
-                            <p style={s.hasilItemLabel}>Berat beras</p>
-                            <p style={{ ...s.hasilItemValue, fontSize: isMobile ? '16px' : '18px' }}>{finalBeras} Kg</p>
+                    {berasInputNum > 0 && (
+                      <div style={{ ...shared.hasilBox, padding: isMobile ? '14px' : '16px' }}>
+                        <p style={shared.hasilTitle}>📊 Setara dengan</p>
+                        <div style={{ ...shared.hasilGrid, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '12px' : 0 }}>
+                          <div style={shared.hasilItem}>
+                            <p style={shared.hasilItemLabel}>Berat beras</p>
+                            <p style={{ ...shared.hasilItemValue, fontSize: isMobile ? font.xl : font.h2 }}>{berasInputNum} {satuanLabel}</p>
                           </div>
-                          {isMobile ? <div style={s.hasilDividerH} /> : <div style={s.hasilDivider} />}
-                          <div style={s.hasilItem}>
-                            <p style={s.hasilItemLabel}>Setara uang</p>
-                            <p style={{ ...s.hasilItemValue, fontSize: isMobile ? '16px' : '18px' }}>{formatRupiah(finalUang)}</p>
+                          {isMobile ? <div style={shared.hasilDividerH} /> : <div style={shared.hasilDivider} />}
+                          <div style={shared.hasilItem}>
+                            <p style={shared.hasilItemLabel}>Setara uang</p>
+                            <p style={{ ...shared.hasilItemValue, fontSize: isMobile ? font.xl : font.h2 }}>{formatRupiah(finalUang)}</p>
                           </div>
                         </div>
+                        {/* Tampilkan konversi ke Kg kalau satuan Liter */}
+                        {satuanBeras === 'liter' && (
+                          <p style={{ fontSize: font.xs, color: colors.textDisabled, marginTop: '10px', paddingTop: '8px', borderTop: `1px solid ${colors.primaryBorder}` }}>
+                            ≈ {finalBerasKg} Kg (disimpan dalam Kg di database)
+                          </p>
+                        )}
                       </div>
                     )}
                   </>
@@ -326,28 +410,28 @@ function ZakatFitrahForm() {
 
           {/* ── Step: Metode ── */}
           {step === 'metode' && (
-            <div style={s.card}>
-              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
-                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Metode Pembayaran</h2>
-                <p style={s.cardSub}>{labelKalkulasi} — {formatRupiah(finalUang)} atau {finalBeras} Kg beras</p>
+            <div style={shared.cardOverflow}>
+              <div style={{ ...s.cardHeader, padding: cardPad }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : font.h3 }}>Metode Pembayaran</h2>
+                <p style={s.cardSub}>{labelKalkulasi} — {formatRupiah(finalUang)} atau {tampilBeras} {satuanLabel} beras</p>
               </div>
-              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
+              <div style={{ ...shared.cardBody, padding: bodyPad }}>
                 {METODE_LIST.map(m => (
                   <button key={m} onClick={() => setMetode(m)}
                     style={{
-                      ...s.metodeBtn,
-                      ...(metode === m ? s.metodeBtnActive : {}),
+                      ...shared.metodeBtn,
+                      ...(metode === m ? shared.metodeBtnActive : {}),
                       padding: isMobile ? '12px 14px' : '14px 16px',
                     }}>
-                    <span style={{ ...s.metodeIcon, fontSize: isMobile ? '19px' : '22px' }}>{METODE_ICON[m]}</span>
-                    <div style={s.metodeText}>
-                      <span style={{ ...s.metodeLabel, fontSize: isMobile ? '13.5px' : '14px' }}>{m}</span>
+                    <span style={{ fontSize: isMobile ? '19px' : '22px' }}>{METODE_ICON[m]}</span>
+                    <div style={shared.metodeText}>
+                      <span style={{ ...shared.metodeLabel, fontSize: isMobile ? '13.5px' : font.md }}>{m}</span>
                       {m === 'Beras'
-                        ? <span style={s.metodeHint}>Bayar {finalBeras} Kg</span>
-                        : <span style={s.metodeHint}>Bayar {formatRupiah(finalUang)}</span>
+                        ? <span style={shared.metodeHint}>Bayar {tampilBeras} {satuanLabel}</span>
+                        : <span style={shared.metodeHint}>Bayar {formatRupiah(finalUang)}</span>
                       }
                     </div>
-                    {metode === m && <span style={s.metodeCheck}>✓</span>}
+                    {metode === m && <span style={shared.metodeCheck}>✓</span>}
                   </button>
                 ))}
               </div>
@@ -356,54 +440,60 @@ function ZakatFitrahForm() {
 
           {/* ── Step: Konfirmasi ── */}
           {step === 'konfirmasi' && metode && (
-            <div style={s.card}>
-              <div style={{ ...s.cardHeader, padding: isMobile ? '16px 16px 0' : '20px 24px 0' }}>
-                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : '17px' }}>Konfirmasi Transaksi</h2>
+            <div style={shared.cardOverflow}>
+              <div style={{ ...s.cardHeader, padding: cardPad }}>
+                <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : font.h3 }}>Konfirmasi Transaksi</h2>
                 <p style={s.cardSub}>Periksa kembali sebelum menyimpan</p>
               </div>
-              <div style={{ ...s.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
-                <div style={s.konfirmasiList}>
+              <div style={{ ...shared.cardBody, padding: bodyPad }}>
+                <div style={shared.konfirmasiList}>
                   {[
                     { label: 'Muzakki',     value: muzakkiNama },
                     { label: 'Jenis Zakat', value: 'Zakat Fitrah' },
-                    { label: 'Cara Input',  value: opsi === 'jiwa' ? `${jiwaNum} jiwa` : opsi === 'nominal' ? 'Nominal langsung' : 'Berat beras' },
+                    { label: 'Cara Input',  value: opsi === 'jiwa' ? `${jiwaNum} jiwa` : opsi === 'nominal' ? 'Nominal langsung' : `Berat beras (${satuanLabel})` },
                     { label: 'Metode',      value: `${METODE_ICON[metode]} ${metode}` },
                   ].map(r => (
-                    <div key={r.label} style={s.konfRow}>
-                      <span style={s.konfLabel}>{r.label}</span>
-                      <span style={s.konfValue}>{r.value}</span>
+                    <div key={r.label} style={shared.konfRow}>
+                      <span style={shared.konfLabel}>{r.label}</span>
+                      <span style={shared.konfValue}>{r.value}</span>
                     </div>
                   ))}
-                  {/* Selalu tampilkan keduanya di konfirmasi */}
-                  <div style={s.konfRow}>
-                    <span style={s.konfLabel}>Jumlah Uang</span>
-                    <span style={{ ...s.konfValue, color: '#2D7A50' }}>{formatRupiah(finalUang)}</span>
+                  <div style={shared.konfRow}>
+                    <span style={shared.konfLabel}>Jumlah Uang</span>
+                    <span style={{ ...shared.konfValue, color: colors.primary }}>{formatRupiah(finalUang)}</span>
                   </div>
-                  <div style={{ ...s.konfRow, borderBottom: 'none' }}>
-                    <span style={s.konfLabel}>Jumlah Beras</span>
-                    <span style={{ ...s.konfValue, color: '#2D7A50', fontSize: isMobile ? '16px' : '18px' }}>{finalBeras} Kg</span>
+                  <div style={{ ...shared.konfRow, borderBottom: 'none' }}>
+                    <span style={shared.konfLabel}>Jumlah Beras</span>
+                    <span style={{ ...shared.konfValue, color: colors.primary, fontSize: isMobile ? font.xl : font.h3 }}>
+                      {tampilBeras} {satuanLabel}
+                      {satuanBeras === 'liter' && (
+                        <span style={{ fontSize: font.xs, color: colors.textDisabled, fontWeight: 400, marginLeft: '6px' }}>
+                          ({finalBerasKg} Kg)
+                        </span>
+                      )}
+                    </span>
                   </div>
                 </div>
                 <button onClick={handleSave} disabled={saving}
-                  style={{ ...s.saveBtn, ...(saving ? s.saveBtnDisabled : {}) }}>
+                  style={{ ...shared.saveBtn, ...(saving ? shared.btnDisabled : {}) }}>
                   {saving ? 'Menyimpan...' : '✓ Simpan Transaksi'}
                 </button>
               </div>
             </div>
           )}
 
-          {stepError && <div style={s.errorBox}>⚠ {stepError}</div>}
+          {stepError && <div style={shared.errorBox}>⚠ {stepError}</div>}
 
           {step !== 'konfirmasi' && (
-            <div style={{ ...s.navRow, flexDirection: isMobile ? 'column' : 'row' }}>
-              <button onClick={handleBack} style={{ ...s.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
-              <button onClick={handleNext} style={s.navNextBtn}>
+            <div style={{ ...shared.navRow, flexDirection: isMobile ? 'column' : 'row' }}>
+              <button onClick={handleBack} style={{ ...shared.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
+              <button onClick={handleNext} style={shared.navNextBtn}>
                 {step === 'metode' ? 'Lihat Ringkasan →' : 'Lanjut →'}
               </button>
             </div>
           )}
           {step === 'konfirmasi' && (
-            <button onClick={handleBack} style={{ ...s.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
+            <button onClick={handleBack} style={{ ...shared.navBackBtn, width: isMobile ? '100%' : 'auto' }}>← Kembali</button>
           )}
         </div>
       </main>
@@ -425,8 +515,8 @@ function ZakatFitrahForm() {
             muzakkiNama,
             jenisZakat: 'Zakat Fitrah',
             metode,
-            jumlahUang: finalUang,
-            jumlahBeras: finalBeras,
+            jumlahUang: metode === 'Beras' ? 0 : finalUang,
+            jumlahBeras: metode === 'Beras' ? finalBerasKg : 0,
             amilPencatat: '',
           }}
           onClose={() => setStruk(null)}
@@ -446,59 +536,8 @@ export default function ZakatFitrahPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  shell: { display: 'flex', minHeight: '100vh', background: '#F8F4ED', fontFamily: "'Plus Jakarta Sans', sans-serif" },
-  main: { flex: 1 },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #EDE8E0' },
-  headerTitle: { fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px', marginBottom: '4px' },
-  headerSub: { fontSize: '13px', color: '#A8A29E' },
-  progressWrap: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' },
-  progressTrack: { flex: 1, height: '6px', background: '#EDE8E0', borderRadius: '99px', overflow: 'hidden' },
-  progressFill: { height: '100%', background: 'linear-gradient(90deg, #2D7A50, #4CAF7D)', borderRadius: '99px', transition: 'width 0.3s ease' },
-  progressLabel: { fontSize: '12px', fontWeight: 600, color: '#A8A29E', textTransform: 'capitalize' },
-  formWrap: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  card: { background: '#fff', borderRadius: '16px', border: '1px solid #EDE8E0', overflow: 'hidden' },
+  formWrap:  { display: 'flex', flexDirection: 'column', gap: '16px' },
   cardHeader: {},
-  cardTitle: { fontWeight: 700, color: '#1C1917', marginBottom: '4px' },
-  cardSub: { fontSize: '13px', color: '#A8A29E', marginBottom: '20px' },
-  cardBody: { display: 'flex', flexDirection: 'column', gap: '14px' },
-  infoBox: { background: '#F8F4ED', borderRadius: '10px', border: '1px solid #EDE8E0' },
-  infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr' },
-  infoLabel: { fontSize: '10px', fontWeight: 700, color: '#A8A29E', letterSpacing: '0.3px', textTransform: 'uppercase', marginBottom: '4px' },
-  infoValue: { fontWeight: 700, color: '#1C1917' },
-  opsiBtn: { display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '11px 12px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
-  opsiBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
-  opsiIcon: { fontSize: '18px', flexShrink: 0, marginTop: '1px' },
-  opsiLabel: { fontSize: '12px', fontWeight: 700, color: '#1C1917', marginBottom: '2px' },
-  opsiDesc: { fontSize: '10px', color: '#78716C' },
-  field: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  label: { fontSize: '13px', fontWeight: 600, color: '#44403C' },
-  inputWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
-  prefix: { position: 'absolute', left: '14px', fontSize: '14px', fontWeight: 600, color: '#78716C', pointerEvents: 'none' },
-  suffix: { position: 'absolute', right: '14px', fontSize: '14px', fontWeight: 600, color: '#78716C', pointerEvents: 'none' },
-  input: { width: '100%', padding: '11px 14px', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', background: '#FAFAF9', boxSizing: 'border-box' },
-  hasilBox: { background: '#F0F7F3', borderRadius: '10px', border: '1.5px solid #2D7A50' },
-  hasilTitle: { fontSize: '13px', fontWeight: 700, color: '#1A4731', marginBottom: '12px' },
-  hasilGrid: { display: 'flex', alignItems: 'stretch' },
-  hasilItem: { flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' },
-  hasilDivider: { width: '1px', background: '#C9E8D5', margin: '0 16px' },
-  hasilDividerH: { height: '1px', background: '#C9E8D5', width: '100%' },
-  hasilItemLabel: { fontSize: '11px', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.3px' },
-  hasilItemValue: { fontWeight: 700, color: '#2D7A50' },
-  metodeBtn: { display: 'flex', alignItems: 'center', gap: '14px', borderRadius: '10px', border: '2px solid #EDE8E0', background: '#FAFAF9', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%' },
-  metodeBtnActive: { borderColor: '#2D7A50', background: '#F0F7F3' },
-  metodeIcon: { flexShrink: 0 },
-  metodeText: { flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' },
-  metodeLabel: { fontWeight: 600, color: '#1C1917' },
-  metodeHint: { fontSize: '12px', color: '#78716C' },
-  metodeCheck: { fontSize: '14px', color: '#2D7A50', fontWeight: 700 },
-  konfirmasiList: { display: 'flex', flexDirection: 'column' },
-  konfRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #F5F0E8' },
-  konfLabel: { fontSize: '13px', color: '#78716C', fontWeight: 500 },
-  konfValue: { fontSize: '14px', color: '#1C1917', fontWeight: 600 },
-  saveBtn: { width: '100%', padding: '14px', fontSize: '15px', fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, #2D7A50, #1A4731)', border: 'none', borderRadius: '12px', cursor: 'pointer', fontFamily: 'inherit', marginTop: '8px' },
-  saveBtnDisabled: { opacity: 0.6, cursor: 'not-allowed' },
-  errorBox: { padding: '12px 16px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', fontSize: '13px', color: '#B91C1C', fontWeight: 500 },
-  navRow: { display: 'flex', gap: '10px' },
-  navBackBtn: { padding: '12px 20px', fontSize: '14px', fontWeight: 600, color: '#57534E', background: '#fff', border: '1.5px solid #EDE8E0', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' },
-  navNextBtn: { flex: 1, padding: '12px 20px', fontSize: '14px', fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, #2D7A50, #1A4731)', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' },
+  cardTitle: { fontWeight: 700, color: colors.text, marginBottom: '4px' },
+  cardSub:   { fontSize: font.base, color: colors.textDisabled, marginBottom: '20px' },
 }

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { colors, font, gradient, radius, shadow, spacing } from '@/styles/tokens'
 
 const navItems = [
   {
@@ -132,7 +133,7 @@ export default function Sidebar() {
             >
               <span style={{
                 ...s.navIcon,
-                color: isActive ? '#2D7A50' : item.highlight ? '#C9A84C' : '#78716C',
+                color: isActive ? colors.primary : item.highlight ? colors.goldBorder : colors.textSubtle,
               }}>
                 {item.icon}
               </span>
@@ -180,7 +181,7 @@ export default function Sidebar() {
       {/* Hamburger button — fixed di pojok kiri atas */}
       <button onClick={() => setIsOpen(true)} style={s.hamburgerBtn}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path d="M2.5 5.5h15M2.5 10h15M2.5 14.5h15" stroke="#1C1917" strokeWidth="1.8" strokeLinecap="round"/>
+          <path d="M2.5 5.5h15M2.5 10h15M2.5 14.5h15" stroke={colors.text} strokeWidth="1.8" strokeLinecap="round"/>
         </svg>
       </button>
 
@@ -207,80 +208,80 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '10px',
     marginBottom: '32px',
-    paddingBottom: '24px',
-    borderBottom: '1px solid #EDE8E0',
+    paddingBottom: spacing.cardPadding,
+    borderBottom: `1px solid ${colors.border}`,
     position: 'relative',
   },
   brandIcon: {
     width: '36px',
     height: '36px',
-    background: 'linear-gradient(135deg, #2D7A50, #1A4731)',
-    borderRadius: '10px',
+    background: gradient.primary,
+    borderRadius: radius.md,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  brandName: { fontSize: '13px', fontWeight: 700, color: '#1C1917', lineHeight: 1.2 },
-  brandSub: { fontSize: '11px', color: '#A8A29E', marginTop: '2px' },
+  brandName: { fontSize: font.base, fontWeight: 700, color: colors.text, lineHeight: 1.2 },
+  brandSub: { fontSize: font.xs, color: colors.textDisabled, marginTop: '2px' },
   closeBtn: {
     position: 'absolute',
     right: 0,
     top: 0,
     background: 'none',
     border: 'none',
-    fontSize: '16px',
-    color: '#A8A29E',
+    fontSize: font.xl,
+    color: colors.textDisabled,
     cursor: 'pointer',
     padding: '6px',
   },
   nav: { display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 },
-  navLabel: { fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: '#C4BDB4', marginBottom: '8px', paddingLeft: '10px' },
+  navLabel: { fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: colors.textPlaceholder, marginBottom: '8px', paddingLeft: '10px' },
   navItem: {
     display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px',
-    borderRadius: '8px', fontSize: '13.5px', fontWeight: 500, color: '#57534E',
+    borderRadius: radius.sm, fontSize: '13.5px', fontWeight: 500, color: colors.textMuted,
     textDecoration: 'none', transition: 'background 0.15s',
   },
-  navItemActive: { background: '#F0F7F3', color: '#1A4731', fontWeight: 600 },
-  navHighlight: { background: '#FDF8EE', color: '#92681A', fontWeight: 600, marginTop: '8px' },
+  navItemActive: { background: colors.primaryLight, color: colors.primaryDark, fontWeight: 600 },
+  navHighlight: { background: colors.goldBg, color: colors.gold, fontWeight: 600, marginTop: '8px' },
   navIcon: { display: 'flex', alignItems: 'center', flexShrink: 0 },
   bottomSection: {
     display: 'flex', flexDirection: 'column', gap: '2px',
-    borderTop: '1px solid #EDE8E0', paddingTop: '12px', marginTop: '8px',
+    borderTop: `1px solid ${colors.border}`, paddingTop: '12px', marginTop: '8px',
   },
   bottomBtn: {
     display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 10px',
-    borderRadius: '8px', fontSize: '13px', fontWeight: 500, color: '#57534E',
+    borderRadius: radius.sm, fontSize: font.base, fontWeight: 500, color: colors.textMuted,
     textDecoration: 'none', transition: 'background 0.15s',
   },
-  bottomBtnActive: { background: '#F0F7F3', color: '#1A4731', fontWeight: 600 },
+  bottomBtnActive: { background: colors.primaryLight, color: colors.primaryDark, fontWeight: 600 },
   logoutBtn: {
     display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 10px',
-    borderRadius: '8px', fontSize: '13px', fontWeight: 500, color: '#A8A29E',
+    borderRadius: radius.sm, fontSize: font.base, fontWeight: 500, color: colors.textDisabled,
     background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left',
   },
 
   // ── Desktop variant ──
   sidebarDesktop: {
-    width: '220px', minHeight: '100vh', background: '#FFFFFF',
-    borderRight: '1px solid #EDE8E0', display: 'flex', flexDirection: 'column',
+    width: '220px', minHeight: '100vh', background: colors.surface,
+    borderRight: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column',
     padding: '24px 16px', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 10,
   },
 
   // ── Mobile variant ──
   hamburgerBtn: {
     position: 'fixed', top: '16px', left: '16px', zIndex: 50,
-    width: '40px', height: '40px', borderRadius: '10px',
-    background: '#fff', border: '1px solid #EDE8E0',
+    width: '40px', height: '40px', borderRadius: radius.md,
+    background: colors.surface, border: `1px solid ${colors.border}`,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    cursor: 'pointer', boxShadow: shadow.float,
   },
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 90,
   },
   sidebarMobile: {
     position: 'fixed', top: 0, left: 0, bottom: 0, width: '260px',
-    background: '#fff', zIndex: 100, display: 'flex', flexDirection: 'column',
+    background: colors.surface, zIndex: 100, display: 'flex', flexDirection: 'column',
     padding: '24px 16px', boxShadow: '4px 0 24px rgba(0,0,0,0.12)',
     transition: 'transform 0.25s ease',
   },

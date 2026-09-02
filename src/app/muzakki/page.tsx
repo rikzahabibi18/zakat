@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
+import { shared } from '@/styles/shared'
+import { colors, font } from '@/styles/tokens'
 
 interface Muzakki {
   id: number
@@ -48,7 +50,7 @@ export default function MuzakkiPage() {
     setLoading(false)
   }
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch awal saat mount, disengaja
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch awal saat mount
   useEffect(() => { fetchData() }, [])
 
   const filtered = useMemo(() => {
@@ -60,33 +62,31 @@ export default function MuzakkiPage() {
     )
   }, [data, search])
 
-const handleSave = async () => {
-  if (!form.nama.trim()) { setError('Nama wajib diisi.'); return }
-  setSaving(true)
-  setError('')
+  const handleSave = async () => {
+    if (!form.nama.trim()) { setError('Nama wajib diisi.'); return }
+    setSaving(true)
+    setError('')
 
-  // 1. Ambil user ID & lembaga_id dari profil_amil
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profil } = await supabase
-    .from('profil_amil')
-    .select('lembaga_id')
-    .eq('id', user!.id)
-    .single()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profil } = await supabase
+      .from('profil_amil')
+      .select('lembaga_id')
+      .eq('id', user!.id)
+      .single()
 
-  // 2. Insert muzakki beserta lembaga_id
-  const { error: err } = await supabase.from('muzakki').insert({
-    nama: form.nama.trim(),
-    nomor_hp: form.nomor_hp.trim() || null,
-    alamat: form.alamat.trim() || null,
-    lembaga_id: profil?.lembaga_id ?? null, // <-- Ditambahkan di sini
-  })
+    const { error: err } = await supabase.from('muzakki').insert({
+      nama: form.nama.trim(),
+      nomor_hp: form.nomor_hp.trim() || null,
+      alamat: form.alamat.trim() || null,
+      lembaga_id: profil?.lembaga_id ?? null,
+    })
 
-  setSaving(false)
-  if (err) { setError('Gagal menyimpan. Coba lagi.'); return }
-  setShowModal(false)
-  setForm({ nama: '', nomor_hp: '', alamat: '' })
-  fetchData()
-}
+    setSaving(false)
+    if (err) { setError('Gagal menyimpan. Coba lagi.'); return }
+    setShowModal(false)
+    setForm({ nama: '', nomor_hp: '', alamat: '' })
+    fetchData()
+  }
 
   const handleCloseModal = () => {
     setShowModal(false)
@@ -95,28 +95,32 @@ const handleSave = async () => {
   }
 
   return (
-    <div style={s.shell}>
+    <div style={shared.shell}>
       <Sidebar />
       <main style={{
-        ...s.main,
+        ...shared.main,
         marginLeft: isMobile ? 0 : '220px',
         padding: isMobile ? '64px 16px 20px' : '32px 36px',
       }}>
         {/* Header */}
         <div style={{
-          ...s.header,
+          ...shared.pageHeader,
           flexDirection: isMobile ? 'column' : 'row',
           alignItems: isMobile ? 'stretch' : 'flex-start',
           gap: isMobile ? '14px' : '0',
         }}>
           <div>
-            <h1 style={s.headerTitle}>Muzakki</h1>
-            <p style={s.headerSub}>Daftar pembayar zakat yang terdaftar</p>
+            <h1 style={{ ...shared.headerTitle, fontSize: isMobile ? font.h2 : font.h1 }}>Muzakki</h1>
+            <p style={shared.headerSub}>Daftar pembayar zakat yang terdaftar</p>
           </div>
           <button onClick={() => setShowModal(true)} style={{
-            ...s.addBtn,
+            ...shared.btnPrimary,
             width: isMobile ? '100%' : 'auto',
+            display: 'inline-flex',
+            alignItems: 'center',
             justifyContent: 'center',
+            gap: '8px',
+            padding: '10px 18px',
           }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M8 3v10M3 8h10" stroke="white" strokeWidth="2" strokeLinecap="round"/>
@@ -126,39 +130,39 @@ const handleSave = async () => {
         </div>
 
         {/* Search */}
-        <div style={s.searchWrap}>
+        <div style={shared.searchWrap}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={s.searchIcon}>
-            <circle cx="7" cy="7" r="5" stroke="#A8A29E" strokeWidth="1.5"/>
-            <path d="M11 11l3 3" stroke="#A8A29E" strokeWidth="1.5" strokeLinecap="round"/>
+            <circle cx="7" cy="7" r="5" stroke={colors.textDisabled} strokeWidth="1.5"/>
+            <path d="M11 11l3 3" stroke={colors.textDisabled} strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
           <input
             type="text"
             placeholder="Cari nama, nomor HP, atau alamat..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={s.searchInput}
+            style={{ ...shared.searchInput, paddingLeft: '40px' }}
           />
           {search && (
-            <button onClick={() => setSearch('')} style={s.clearBtn}>✕</button>
+            <button onClick={() => setSearch('')} style={shared.clearBtn}>✕</button>
           )}
         </div>
 
         {/* Table / Card List */}
         {loading ? (
-          <div style={s.tableCard}>
-            <div style={s.centerState}>
-              <div style={s.spinner} />
-              <p style={s.stateText}>Memuat data...</p>
+          <div style={shared.tableCard}>
+            <div style={shared.centerState}>
+              <div style={shared.spinner} />
+              <p style={shared.stateText}>Memuat data...</p>
             </div>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={s.tableCard}>
-            <div style={s.centerState}>
-              <p style={s.emptyIcon}>{search ? '🔍' : '👤'}</p>
-              <p style={s.stateTitle}>
+          <div style={shared.tableCard}>
+            <div style={shared.centerState}>
+              <p style={shared.emptyIcon}>{search ? '🔍' : '👤'}</p>
+              <p style={shared.stateTitle}>
                 {search ? 'Tidak ditemukan' : 'Belum ada muzakki'}
               </p>
-              <p style={s.stateText}>
+              <p style={shared.stateText}>
                 {search
                   ? `Tidak ada hasil untuk "${search}"`
                   : 'Klik "Tambah Muzakki" untuk mendaftarkan pembayar zakat pertama.'}
@@ -186,7 +190,7 @@ const handleSave = async () => {
                           {m.nomor_hp}
                         </a>
                       ) : (
-                        <span style={s.emptyCell}>—</span>
+                        <span style={{ color: colors.textPlaceholder }}>—</span>
                       )}
                     </p>
                   </div>
@@ -201,37 +205,37 @@ const handleSave = async () => {
           </div>
         ) : (
           /* Tabel — Desktop */
-          <div style={s.tableCard}>
-            <div style={s.tableInfo}>
-              <span style={s.tableCount}>
+          <div style={shared.tableCard}>
+            <div style={shared.tableInfo}>
+              <span style={shared.tableCount}>
                 {filtered.length} muzakki{search ? ' ditemukan' : ' terdaftar'}
               </span>
             </div>
-            <div style={s.tableScrollWrap}>
-              <table style={s.table}>
+            <div style={shared.tableScrollWrap}>
+              <table style={shared.table}>
                 <thead>
                   <tr>
                     {['No', 'Nama', 'Nomor HP', 'Alamat', 'Terdaftar'].map(h => (
-                      <th key={h} style={s.th}>{h}</th>
+                      <th key={h} style={shared.th}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((m, i) => (
-                    <tr key={m.id} style={{ background: i % 2 === 0 ? '#fff' : '#FAFAF9' }}>
-                      <td style={{ ...s.td, ...s.tdNo }}>{i + 1}</td>
-                      <td style={s.td}>
+                    <tr key={m.id} style={{ background: i % 2 === 0 ? colors.surface : colors.surfaceAlt }}>
+                      <td style={{ ...shared.td, color: colors.textPlaceholder, fontWeight: 600, width: '48px' }}>{i + 1}</td>
+                      <td style={shared.td}>
                         <span style={s.namaText}>{m.nama}</span>
                       </td>
-                      <td style={s.td}>
+                      <td style={shared.td}>
                         {m.nomor_hp
                           ? <a href={`tel:${m.nomor_hp}`} style={s.hpLink}>{m.nomor_hp}</a>
-                          : <span style={s.emptyCell}>—</span>}
+                          : <span style={{ color: colors.textPlaceholder }}>—</span>}
                       </td>
-                      <td style={s.td}>
-                        {m.alamat ?? <span style={s.emptyCell}>—</span>}
+                      <td style={shared.td}>
+                        {m.alamat ?? <span style={{ color: colors.textPlaceholder }}>—</span>}
                       </td>
-                      <td style={{ ...s.td, color: '#A8A29E' }}>
+                      <td style={{ ...shared.td, color: colors.textDisabled }}>
                         {formatTanggal(m.created_at)}
                       </td>
                     </tr>
@@ -248,63 +252,72 @@ const handleSave = async () => {
         <div style={s.overlay} onClick={handleCloseModal}>
           <div
             style={{
-              ...s.modal,
+              ...shared.card,
+              width: '100%',
               maxWidth: isMobile ? '100%' : '440px',
               margin: isMobile ? '0' : undefined,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+              maxHeight: '100vh',
+              overflow: 'hidden',
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={s.modalHeader}>
-              <h2 style={s.modalTitle}>Tambah Muzakki</h2>
-              <button onClick={handleCloseModal} style={s.closeBtn}>✕</button>
+            <div style={{ ...shared.cardHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: `1px solid ${colors.border}` }}>
+              <h2 style={{ ...shared.cardTitle, fontSize: font.lg, margin: 0 }}>Tambah Muzakki</h2>
+              <button onClick={handleCloseModal} style={shared.clearBtn}>✕</button>
             </div>
 
-            <div style={s.modalBody}>
-              <div style={s.field}>
-                <label style={s.label}>Nama <span style={s.required}>*</span></label>
+            <div style={{ ...shared.cardBody, padding: '24px', maxHeight: '60vh', overflowY: 'auto' }}>
+              <div style={shared.field}>
+                <label style={shared.label}>Nama <span style={s.required}>*</span></label>
                 <input
                   type="text"
                   placeholder="Nama lengkap"
                   value={form.nama}
                   onChange={e => setForm(f => ({ ...f, nama: e.target.value }))}
-                  style={s.input}
+                  style={shared.input}
                   autoFocus
                 />
               </div>
-              <div style={s.field}>
-                <label style={s.label}>Nomor HP</label>
+              <div style={shared.field}>
+                <label style={shared.label}>Nomor HP</label>
                 <input
                   type="tel"
                   placeholder="08xxxxxxxxxx"
                   value={form.nomor_hp}
                   onChange={e => setForm(f => ({ ...f, nomor_hp: e.target.value }))}
-                  style={s.input}
+                  style={shared.input}
                 />
               </div>
-              <div style={s.field}>
-                <label style={s.label}>Alamat</label>
+              <div style={shared.field}>
+                <label style={shared.label}>Alamat</label>
                 <textarea
                   placeholder="Alamat lengkap (opsional)"
                   value={form.alamat}
                   onChange={e => setForm(f => ({ ...f, alamat: e.target.value }))}
-                  style={s.textarea}
+                  style={shared.textarea}
                   rows={3}
                 />
               </div>
 
-              {error && <p style={s.errorText}>⚠ {error}</p>}
+              {error && <div style={shared.errorBox}>⚠ {error}</div>}
             </div>
 
             <div
               style={{
-                ...s.modalFooter,
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '10px',
+                padding: '16px 24px',
+                borderTop: `1px solid ${colors.border}`,
+                background: colors.surfaceAlt,
                 flexDirection: isMobile ? 'column-reverse' : 'row',
               }}
             >
               <button
                 onClick={handleCloseModal}
                 style={{
-                  ...s.cancelBtn,
+                  ...shared.btnOutline,
                   width: isMobile ? '100%' : 'auto',
                 }}
               >
@@ -314,8 +327,9 @@ const handleSave = async () => {
                 onClick={handleSave}
                 disabled={saving}
                 style={{
-                  ...s.saveBtn,
+                  ...shared.btnPrimary,
                   width: isMobile ? '100%' : 'auto',
+                  opacity: saving ? 0.6 : 1,
                 }}
               >
                 {saving ? 'Menyimpan...' : 'Simpan'}
@@ -329,226 +343,24 @@ const handleSave = async () => {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  shell: {
-    display: 'flex',
-    minHeight: '100vh',
-    background: '#F8F4ED',
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    overflowX: 'hidden',
-  },
-  main: {
-    flex: 1,
-    boxSizing: 'border-box',
-    minWidth: 0,
-    maxWidth: '100%',
-    overflowX: 'hidden',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    marginBottom: '24px',
-    paddingBottom: '24px',
-    borderBottom: '1px solid #EDE8E0',
-  },
-  headerTitle: {
-    fontSize: '26px',
-    fontWeight: 700,
-    color: '#1C1917',
-    letterSpacing: '-0.5px',
-    marginBottom: '4px',
-  },
-  headerSub: {
-    fontSize: '13px',
-    color: '#A8A29E',
-  },
-  addBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 18px',
-    background: 'linear-gradient(135deg, #2D7A50, #1A4731)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '10px',
-    fontSize: '13.5px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  },
-  searchWrap: {
-    position: 'relative',
-    marginBottom: '16px',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  searchIcon: {
-    position: 'absolute',
-    left: '12px',
-    pointerEvents: 'none',
-  },
-  searchInput: {
-    width: '100%',
-    padding: '11px 40px',
-    fontSize: '14px',
-    background: '#fff',
-    border: '1.5px solid #EDE8E0',
-    borderRadius: '10px',
-    outline: 'none',
-    fontFamily: 'inherit',
-    color: '#1C1917',
-    boxSizing: 'border-box',
-  },
-  clearBtn: {
-    position: 'absolute',
-    right: '12px',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#A8A29E',
-    fontSize: '13px',
-    padding: '4px',
-  },
-  tableCard: {
-    background: '#fff',
-    borderRadius: '14px',
-    border: '1px solid #EDE8E0',
-    overflow: 'hidden',
-  },
-  tableInfo: {
-    padding: '12px 16px',
-    borderBottom: '1px solid #F5F0E8',
-    background: '#FAFAF9',
-  },
-  tableCount: {
-    fontSize: '12px',
-    fontWeight: 600,
-    color: '#A8A29E',
-    letterSpacing: '0.3px',
-  },
-  tableScrollWrap: {
-    overflowX: 'auto',
-    WebkitOverflowScrolling: 'touch',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '13px',
-    minWidth: '600px',
-  },
-  th: {
-    padding: '12px 16px',
-    textAlign: 'left' as const,
-    fontSize: '11px',
-    fontWeight: 700,
-    color: '#A8A29E',
-    letterSpacing: '0.5px',
-    background: '#FAFAF9',
-    borderBottom: '1px solid #EDE8E0',
-  },
-  td: {
-    padding: '12px 16px',
-    color: '#44403C',
-    borderBottom: '1px solid #F5F0E8',
-    fontSize: '13px',
-  },
-  tdNo: {
-    color: '#C4BDB4',
-    fontWeight: 600,
-    width: '48px',
-  },
-  namaText: {
-    fontWeight: 600,
-    color: '#1C1917',
-  },
-  hpLink: {
-    color: '#2D7A50',
-    textDecoration: 'none',
-    fontWeight: 500,
-  },
-  emptyCell: {
-    color: '#D4CEC7',
-  },
-  centerState: {
-    padding: '64px 32px',
-    textAlign: 'center' as const,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    gap: '8px',
-  },
-  spinner: {
-    width: '28px',
-    height: '28px',
-    border: '3px solid #EDE8E0',
-    borderTop: '3px solid #2D7A50',
-    borderRadius: '50%',
-    animation: 'spin 0.7s linear infinite',
-    marginBottom: '8px',
-  },
-  emptyIcon: { fontSize: '32px', marginBottom: '4px' },
-  stateTitle: { fontSize: '15px', fontWeight: 600, color: '#57534E' },
-  stateText: { fontSize: '13px', color: '#A8A29E' },
-
+  searchIcon: { position: 'absolute', left: '12px', pointerEvents: 'none' },
+  namaText: { fontWeight: 600, color: colors.text },
+  hpLink: { color: colors.primary, textDecoration: 'none', fontWeight: 500 },
+  required: { color: colors.danger },
+  
   /* Mobile card list */
-  mobileListContainer: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-  },
-  tableCountMobile: {
-    fontSize: '12px',
-    fontWeight: 600,
-    color: '#A8A29E',
-    marginBottom: '2px',
-  },
-  mobileCard: {
-    background: '#fff',
-    border: '1px solid #EDE8E0',
-    borderRadius: '12px',
-    padding: '14px 16px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-  },
-  mobileCardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottom: '1px solid #F5F0E8',
-    paddingBottom: '8px',
-  },
-  mobileCardBody: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  mobileCardFooter: {
-    borderTop: '1px solid #F5F0E8',
-    paddingTop: '8px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '3px',
-  },
-  mobileFooterText: {
-    fontSize: '12px',
-    color: '#78716C',
-  },
-  mobileLabelText: {
-    fontSize: '11px',
-    color: '#A8A29E',
-    marginBottom: '2px',
-  },
-  mobileValueText: {
-    fontSize: '13px',
-    fontWeight: 600,
-    color: '#1C1917',
-  },
-  mobileTimeText: {
-    fontSize: '11px',
-    color: '#78716C',
-  },
+  mobileListContainer: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  tableCountMobile: { fontSize: font.sm, fontWeight: 600, color: colors.textDisabled, marginBottom: '2px' },
+  mobileCard: { background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  mobileCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${colors.borderLight}`, paddingBottom: '8px' },
+  mobileCardBody: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' },
+  mobileCardFooter: { borderTop: `1px solid ${colors.borderLight}`, paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '3px' },
+  mobileFooterText: { fontSize: font.sm, color: colors.textSubtle },
+  mobileLabelText: { fontSize: font.xs, color: colors.textDisabled, marginBottom: '2px' },
+  mobileValueText: { fontSize: font.md, fontWeight: 600, color: colors.text },
+  mobileTimeText: { fontSize: font.xs, color: colors.textSubtle },
 
-  // Modal
+  /* Modal Overlay */
   overlay: {
     position: 'fixed',
     inset: 0,
@@ -558,112 +370,5 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     zIndex: 100,
     padding: '0',
-  },
-  modal: {
-    background: '#fff',
-    borderRadius: '16px',
-    width: '100%',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-    overflow: 'hidden',
-    maxHeight: '100vh',
-  },
-  modalHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '20px 24px',
-    borderBottom: '1px solid #EDE8E0',
-  },
-  modalTitle: {
-    fontSize: '16px',
-    fontWeight: 700,
-    color: '#1C1917',
-  },
-  closeBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: '16px',
-    color: '#A8A29E',
-    cursor: 'pointer',
-    padding: '4px',
-  },
-  modalBody: {
-    padding: '24px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '16px',
-    maxHeight: '60vh',
-    overflowY: 'auto',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '6px',
-  },
-  label: {
-    fontSize: '13px',
-    fontWeight: 600,
-    color: '#44403C',
-  },
-  required: {
-    color: '#E11D48',
-  },
-  input: {
-    padding: '10px 12px',
-    fontSize: '14px',
-    border: '1.5px solid #EDE8E0',
-    borderRadius: '8px',
-    outline: 'none',
-    fontFamily: 'inherit',
-    color: '#1C1917',
-    background: '#FAFAF9',
-    boxSizing: 'border-box',
-  },
-  textarea: {
-    padding: '10px 12px',
-    fontSize: '14px',
-    border: '1.5px solid #EDE8E0',
-    borderRadius: '8px',
-    outline: 'none',
-    fontFamily: 'inherit',
-    color: '#1C1917',
-    background: '#FAFAF9',
-    resize: 'vertical' as const,
-    boxSizing: 'border-box',
-  },
-  errorText: {
-    fontSize: '13px',
-    color: '#B91C1C',
-    fontWeight: 500,
-  },
-  modalFooter: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '10px',
-    padding: '16px 24px',
-    borderTop: '1px solid #EDE8E0',
-    background: '#FAFAF9',
-  },
-  cancelBtn: {
-    padding: '9px 18px',
-    fontSize: '13.5px',
-    fontWeight: 600,
-    color: '#57534E',
-    background: '#fff',
-    border: '1.5px solid #EDE8E0',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  },
-  saveBtn: {
-    padding: '9px 18px',
-    fontSize: '13.5px',
-    fontWeight: 600,
-    color: '#fff',
-    background: 'linear-gradient(135deg, #2D7A50, #1A4731)',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
   },
 }

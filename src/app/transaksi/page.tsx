@@ -5,6 +5,8 @@ import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/utils/supabase/client'
 import Sidebar from '@/components/Sidebar'
+import { shared } from '@/styles/shared'
+import { colors, font, radius } from '@/styles/tokens'
 
 interface Transaksi {
   id: number
@@ -18,10 +20,10 @@ interface Transaksi {
 }
 
 const METODE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
-  Tunai:           { bg: '#F0F7F3', color: '#1A4731', label: '💵 Tunai' },
-  'Transfer Bank': { bg: '#EFF6FF', color: '#1D4ED8', label: '🏦 Transfer' },
-  QRIS:            { bg: '#F5F3FF', color: '#7C3AED', label: '📱 QRIS' },
-  Beras:           { bg: '#FDF8EE', color: '#92681A', label: '🌾 Beras' },
+  Tunai:           { bg: colors.primaryLight, color: colors.primaryDark, label: '💵 Tunai' },
+  'Transfer Bank': { bg: colors.blueBg,       color: colors.blue,       label: '🏦 Transfer' },
+  QRIS:            { bg: colors.purpleBg,     color: colors.purple,     label: '📱 QRIS' },
+  Beras:           { bg: colors.goldBg,       color: colors.gold,      label: '🌾 Beras' },
 }
 
 function normKategori(nama: string | undefined): string {
@@ -32,6 +34,30 @@ function normKategori(nama: string | undefined): string {
 
 function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
+}
+
+function getPageNumbers(current: number, total: number, maxVisible = 3): (number | '...')[] {
+  if (total <= maxVisible) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const half = Math.floor(maxVisible / 2)
+  let start = Math.max(1, current - half)
+  let end = start + maxVisible - 1
+  if (end > total) {
+    end = total
+    start = end - maxVisible + 1
+  }
+  const pages: (number | '...')[] = []
+  if (start > 1) {
+    pages.push(1)
+    if (start > 2) pages.push('...')
+  }
+  for (let p = start; p <= end; p++) pages.push(p)
+  if (end < total) {
+    if (end < total - 1) pages.push('...')
+    pages.push(total)
+  }
+  return pages
 }
 
 function formatTanggal(iso: string) {
@@ -67,6 +93,7 @@ export default function TransaksiPage() {
   const [filterKategori, setFilterKategori] = useState('Semua')
   const [kategoriList, setKategoriList] = useState<string[]>([])
   const [isMobile, setIsMobile] = useState(false)
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768)
@@ -122,25 +149,35 @@ export default function TransaksiPage() {
 
   const hasActiveFilter = !!(search || filterMetode !== 'Semua' || filterKategori !== 'Semua')
 
+  const PAGE_SIZE = 10
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const paginated = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  )
+
   return (
-    <div style={s.shell}>
+    <div style={shared.shell}>
       <Sidebar />
       <main style={{
-        ...s.main,
+        ...shared.main,
         marginLeft: isMobile ? 0 : '220px',
         padding: isMobile ? '64px 16px 20px' : '32px 36px',
       }}>
 
         {/* Header */}
         <div style={{
-          ...s.header,
+          ...shared.pageHeader,
+          marginBottom: '24px',
+          paddingBottom: '24px',
           flexDirection: isMobile ? 'column' : 'row',
           alignItems: isMobile ? 'stretch' : 'flex-start',
           gap: isMobile ? '14px' : '0',
         }}>
           <div>
-            <h1 style={{ ...s.headerTitle, fontSize: isMobile ? '22px' : '26px' }}>Transaksi</h1>
-            <p style={s.headerSub}>Riwayat seluruh pembayaran zakat</p>
+            <h1 style={{ ...shared.headerTitle, fontSize: isMobile ? font.h2 : font.h1 }}>Transaksi</h1>
+            <p style={shared.headerSub}>Riwayat seluruh pembayaran zakat</p>
           </div>
           <div style={{
             ...s.headerRight,
@@ -148,19 +185,34 @@ export default function TransaksiPage() {
             width: isMobile ? '100%' : 'auto',
           }}>
             {!loading && filtered.length > 0 && (
-              <button onClick={() => exportToExcel(filtered)} style={{
-                ...s.exportBtn,
-                width: isMobile ? '100%' : 'auto',
-                justifyContent: 'center',
-              }}>
+              <button
+                onClick={() => exportToExcel(filtered)}
+                style={{
+                  ...shared.btnSecondary,
+                  width: isMobile ? '100%' : 'auto',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '10px 16px',
+                  fontWeight: 600,
+                }}
+              >
                 ⬇ Export Excel
               </button>
             )}
-            <Link href="/transaksi/tambah" style={{
-              ...s.addBtn,
-              width: isMobile ? '100%' : 'auto',
-              justifyContent: 'center',
-            }}>
+            <Link
+              href="/transaksi/tambah"
+              style={{
+                ...shared.btnPrimary,
+                width: isMobile ? '100%' : 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '10px 18px',
+                textDecoration: 'none',
+              }}
+            >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M8 3v10M3 8h10" stroke="white" strokeWidth="2" strokeLinecap="round"/>
               </svg>
@@ -179,13 +231,13 @@ export default function TransaksiPage() {
               <p style={s.summaryLabel}>Total Transaksi</p>
               <p style={s.summaryValue}>{filtered.length}</p>
             </div>
-            <div style={{ ...s.summaryCard, background: '#F0F7F3', borderColor: '#2D7A5022' }}>
+            <div style={{ ...s.summaryCard, background: colors.primaryLight, border: `1.5px solid ${colors.primary}22` }}>
               <p style={s.summaryLabel}>Total Uang</p>
-              <p style={{ ...s.summaryValue, color: '#2D7A50', fontSize: isMobile ? '16px' : '20px' }}>{formatRupiah(totalUang)}</p>
+              <p style={{ ...s.summaryValue, color: colors.primary, fontSize: isMobile ? '16px' : '20px' }}>{formatRupiah(totalUang)}</p>
             </div>
-            <div style={{ ...s.summaryCard, background: '#FDF8EE', borderColor: '#C9A84C22' }}>
+            <div style={{ ...s.summaryCard, background: colors.goldBg, border: `1.5px solid ${colors.goldBorder}22` }}>
               <p style={s.summaryLabel}>Total Beras</p>
-              <p style={{ ...s.summaryValue, color: '#92681A', fontSize: isMobile ? '16px' : '20px' }}>{totalBeras.toFixed(1)} Kg</p>
+              <p style={{ ...s.summaryValue, color: colors.gold, fontSize: isMobile ? '16px' : '20px' }}>{totalBeras.toFixed(1)} Kg</p>
             </div>
           </div>
         )}
@@ -195,30 +247,51 @@ export default function TransaksiPage() {
           ...s.filterBar,
           flexDirection: isMobile ? 'column' : 'row',
         }}>
-          <div style={s.searchWrap}>
+          <div style={shared.searchWrapInline}>
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={s.searchIcon}>
-              <circle cx="7" cy="7" r="5" stroke="#A8A29E" strokeWidth="1.5"/>
-              <path d="M11 11l3 3" stroke="#A8A29E" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="7" cy="7" r="5" stroke={colors.textDisabled} strokeWidth="1.5"/>
+              <path d="M11 11l3 3" stroke={colors.textDisabled} strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
             <input
               type="text"
               placeholder="Cari nama muzakki..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={s.searchInput}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              style={{ ...shared.searchInput, paddingLeft: '40px' }}
             />
-            {search && <button onClick={() => setSearch('')} style={s.clearBtn}>✕</button>}
+            {search && <button onClick={() => { setSearch(''); setPage(1) }} style={shared.clearBtn}>✕</button>}
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', width: isMobile ? '100%' : 'auto' }}>
-            <select value={filterMetode} onChange={e => setFilterMetode(e.target.value)} style={{ ...s.select, flex: isMobile ? 1 : 'none' }}>
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            width: isMobile ? '100%' : 'auto',
+            flexShrink: 0,  // ← jangan menyusut
+          }}>
+            <select
+              value={filterMetode}
+              onChange={e => { setFilterMetode(e.target.value); setPage(1) }}
+              style={{
+                ...shared.select,
+                width: isMobile ? 'auto' : '140px',  // ← lebar fixed di desktop
+                flex: isMobile ? 1 : 'none',
+              }}
+            >
               <option value="Semua">Semua Metode</option>
               {['Tunai', 'Transfer Bank', 'QRIS', 'Beras'].map(m => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
 
-            <select value={filterKategori} onChange={e => setFilterKategori(e.target.value)} style={{ ...s.select, flex: isMobile ? 1 : 'none' }}>
+            <select
+              value={filterKategori}
+              onChange={e => { setFilterKategori(e.target.value); setPage(1) }}
+              style={{
+                ...shared.select,
+                width: isMobile ? 'auto' : '155px',  // ← lebar fixed di desktop
+                flex: isMobile ? 1 : 'none',
+              }}
+            >
               <option value="Semua">Semua Kategori</option>
               {kategoriList.map(k => (
                 <option key={k} value={k}>{k}</option>
@@ -229,18 +302,18 @@ export default function TransaksiPage() {
 
         {/* List / Table */}
         {loading ? (
-          <div style={s.tableCard}>
-            <div style={s.centerState}>
-              <div style={s.spinner} />
-              <p style={s.stateText}>Memuat data...</p>
+          <div style={shared.tableCard}>
+            <div style={shared.centerState}>
+              <div style={shared.spinner} />
+              <p style={shared.stateText}>Memuat data...</p>
             </div>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={s.tableCard}>
-            <div style={s.centerState}>
-              <p style={s.emptyIcon}>{hasActiveFilter ? '🔍' : '📭'}</p>
-              <p style={s.stateTitle}>{hasActiveFilter ? 'Tidak ada hasil' : 'Belum ada transaksi'}</p>
-              <p style={s.stateText}>
+          <div style={shared.tableCard}>
+            <div style={shared.centerState}>
+              <p style={shared.emptyIcon}>{hasActiveFilter ? '🔍' : '📭'}</p>
+              <p style={shared.stateTitle}>{hasActiveFilter ? 'Tidak ada hasil' : 'Belum ada transaksi'}</p>
+              <p style={shared.stateText}>
                 {hasActiveFilter
                   ? 'Coba ubah filter atau kata kunci pencarian.'
                   : 'Mulai catat transaksi pertama via tombol "Catat Zakat".'}
@@ -253,7 +326,7 @@ export default function TransaksiPage() {
             <p style={s.tableCountMobile}>
               {filtered.length} transaksi{hasActiveFilter ? ' · filter aktif' : ''}
             </p>
-            {filtered.map(t => {
+            {paginated.map(t => {
               const metodeStyle = METODE_BADGE[t.metode_pembayaran] ?? METODE_BADGE['Tunai']
               return (
                 <div key={t.id} style={s.mobileCard}>
@@ -284,47 +357,83 @@ export default function TransaksiPage() {
           </div>
         ) : (
           /* Table — Desktop */
-          <div style={s.tableCard}>
-            <div style={s.tableInfo}>
-              <span style={s.tableCount}>{filtered.length} transaksi</span>
+          <div style={shared.tableCard}>
+            <div style={shared.tableInfo}>
+              <span style={shared.tableCount}>{filtered.length} transaksi</span>
               <span style={s.tableInfoHint}>{hasActiveFilter ? '· hasil filter aktif' : '· semua data'}</span>
             </div>
-            <table style={s.table}>
+            <table style={shared.table}>
               <thead>
                 <tr>
                   {['No', 'Waktu', 'Muzakki', 'Kategori', 'Metode', 'Uang', 'Beras', 'Dicatat oleh'].map(h => (
-                    <th key={h} style={s.th}>{h}</th>
+                    <th key={h} style={shared.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((t, i) => {
+                {paginated.map((t, i) => {
                   const metodeStyle = METODE_BADGE[t.metode_pembayaran] ?? METODE_BADGE['Tunai']
                   return (
-                    <tr key={t.id} style={{ background: i % 2 === 0 ? '#fff' : '#FAFAF9' }}>
-                      <td style={{ ...s.td, ...s.tdNo }}>{i + 1}</td>
-                      <td style={{ ...s.td, whiteSpace: 'nowrap', color: '#A8A29E' }}>{formatTanggal(t.tanggal)}</td>
-                      <td style={s.td}><span style={s.namaText}>{t.muzakki?.nama ?? '—'}</span></td>
-                      <td style={s.td}>
+                    <tr key={t.id} style={{ background: i % 2 === 0 ? colors.surface : colors.surfaceAlt }}>
+                      <td style={{ ...shared.td, ...s.tdNo }}>{(currentPage - 1) * PAGE_SIZE + i + 1}</td>
+                      <td style={{ ...shared.td, whiteSpace: 'nowrap', color: colors.textDisabled }}>{formatTanggal(t.tanggal)}</td>
+                      <td style={shared.td}><span style={s.namaText}>{t.muzakki?.nama ?? '—'}</span></td>
+                      <td style={shared.td}>
                         <span style={s.kategoriBadge}>{normKategori(t.kategori_zakat?.nama_kategori)}</span>
                       </td>
-                      <td style={s.td}>
+                      <td style={shared.td}>
                         <span style={{ ...s.metodeBadge, background: metodeStyle.bg, color: metodeStyle.color }}>
                           {metodeStyle.label}
                         </span>
                       </td>
-                      <td style={{ ...s.td, ...s.tdNum }}>
+                      <td style={{ ...shared.td, ...s.tdNum }}>
                         {t.jumlah_uang > 0 ? formatRupiah(t.jumlah_uang) : <span style={s.emptyCell}>—</span>}
                       </td>
-                      <td style={{ ...s.td, ...s.tdNum }}>
+                      <td style={{ ...shared.td, ...s.tdNum }}>
                         {t.jumlah_beras > 0 ? `${t.jumlah_beras} Kg` : <span style={s.emptyCell}>—</span>}
                       </td>
-                      <td style={{ ...s.td, color: '#78716C', fontSize: '12px' }}>{t.amil_pencatat ?? '—'}</td>
+                      <td style={{ ...shared.td, color: colors.textSubtle, fontSize: font.sm }}>{t.amil_pencatat ?? '—'}</td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {!loading && filtered.length > 0 && totalPages > 1 && (
+          <div style={s.paginationRow}>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ ...shared.btnOutline, ...(currentPage === 1 ? shared.btnDisabled : {}) }}
+            >
+              ← Sebelumnya
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {getPageNumbers(currentPage, totalPages).map((p, idx) =>
+                p === '...' ? (
+                  <span key={`ellipsis-${idx}`} style={s.pageEllipsis}>…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    style={{ ...s.pageNumBtn, ...(p === currentPage ? s.pageNumBtnActive : {}) }}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+            </div>
+
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              style={{ ...shared.btnOutline, ...(currentPage === totalPages ? shared.btnDisabled : {}) }}
+            >
+              Berikutnya →
+            </button>
           </div>
         )}
       </main>
@@ -333,51 +442,41 @@ export default function TransaksiPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  shell: { display: 'flex', minHeight: '100vh', background: '#F8F4ED', fontFamily: "'Plus Jakarta Sans', sans-serif", overflowX: 'hidden' },
-  main: { flex: 1, boxSizing: 'border-box', minWidth: 0, maxWidth: '100%', overflowX: 'hidden' },
-  header: { display: 'flex', justifyContent: 'space-between', marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid #EDE8E0' },
-  headerTitle: { fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px', marginBottom: '4px' },
-  headerSub: { fontSize: '13px', color: '#A8A29E' },
   headerRight: { display: 'flex', alignItems: 'center', gap: '10px' },
-  exportBtn: { display: 'flex', alignItems: 'center', padding: '10px 16px', fontSize: '13.5px', fontWeight: 600, color: '#2D7A50', background: '#F0F7F3', border: '1.5px solid #2D7A50', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit' },
-  addBtn: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', background: 'linear-gradient(135deg, #2D7A50, #1A4731)', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '13.5px', fontWeight: 600, cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit' },
   summaryRow: { display: 'grid', gap: '12px', marginBottom: '20px' },
-  summaryCard: { background: '#fff', borderRadius: '12px', padding: '14px 16px', border: '1.5px solid #EDE8E0', boxSizing: 'border-box' },
-  summaryLabel: { fontSize: '11px', fontWeight: 600, color: '#A8A29E', letterSpacing: '0.3px', marginBottom: '6px' },
-  summaryValue: { fontSize: '20px', fontWeight: 700, color: '#1C1917', letterSpacing: '-0.5px' },
+  summaryCard: { background: colors.surface, borderRadius: radius.lg, padding: '14px 16px', border: `1.5px solid ${colors.border}`, boxSizing: 'border-box' },
+  summaryLabel: { fontSize: font.sm, fontWeight: 600, color: colors.textDisabled, letterSpacing: '0.3px', marginBottom: '6px' },
+  summaryValue: { fontSize: '20px', fontWeight: 700, color: colors.text, letterSpacing: '-0.5px' },
   filterBar: { display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'stretch' },
-  searchWrap: { position: 'relative', flex: 1, display: 'flex', alignItems: 'center' },
   searchIcon: { position: 'absolute', left: '12px', pointerEvents: 'none' },
-  searchInput: { width: '100%', padding: '10px 36px', fontSize: '13.5px', background: '#fff', border: '1.5px solid #EDE8E0', borderRadius: '10px', outline: 'none', fontFamily: 'inherit', color: '#1C1917', boxSizing: 'border-box' },
-  clearBtn: { position: 'absolute', right: '10px', background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', fontSize: '12px', padding: '4px' },
-  select: { padding: '10px 12px', fontSize: '13px', fontWeight: 500, border: '1.5px solid #EDE8E0', borderRadius: '10px', background: '#fff', color: '#44403C', outline: 'none', fontFamily: 'inherit', cursor: 'pointer', minWidth: 0 },
-  tableCard: { background: '#fff', borderRadius: '14px', border: '1px solid #EDE8E0', overflow: 'hidden' },
-  tableInfo: { padding: '12px 16px', borderBottom: '1px solid #F5F0E8', background: '#FAFAF9', display: 'flex', gap: '6px', alignItems: 'center' },
-  tableCount: { fontSize: '12px', fontWeight: 600, color: '#A8A29E' },
-  tableInfoHint: { fontSize: '12px', color: '#C4BDB4' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
-  th: { padding: '12px 14px', textAlign: 'left' as const, fontSize: '11px', fontWeight: 700, color: '#A8A29E', letterSpacing: '0.5px', background: '#FAFAF9', borderBottom: '1px solid #EDE8E0' },
-  td: { padding: '11px 14px', color: '#44403C', borderBottom: '1px solid #F5F0E8' },
-  tdNo: { color: '#C4BDB4', fontWeight: 600, width: '40px' },
+  tableInfoHint: { fontSize: font.sm, color: colors.textPlaceholder },
+  tdNo: { color: colors.textPlaceholder, fontWeight: 600, width: '40px' },
   tdNum: { fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
-  namaText: { fontWeight: 700, color: '#1C1917', fontSize: '14px' },
-  kategoriBadge: { display: 'inline-block', padding: '3px 8px', borderRadius: '20px', background: '#F0F7F3', color: '#2D7A50', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' },
-  metodeBadge: { display: 'inline-block', padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' },
+  namaText: { fontWeight: 700, color: colors.text, fontSize: font.md },
+  kategoriBadge: { display: 'inline-block', padding: '3px 8px', borderRadius: radius.full, background: colors.primaryLight, color: colors.primary, fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' },
+  metodeBadge: { display: 'inline-block', padding: '3px 8px', borderRadius: radius.full, fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' },
   emptyCell: { color: '#D4CEC7' },
-  centerState: { padding: '64px 32px', textAlign: 'center' as const, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '8px' },
-  spinner: { width: '28px', height: '28px', border: '3px solid #EDE8E0', borderTop: '3px solid #2D7A50', borderRadius: '50%', animation: 'spin 0.7s linear infinite', marginBottom: '8px' },
-  emptyIcon: { fontSize: '32px', marginBottom: '4px' },
-  stateTitle: { fontSize: '15px', fontWeight: 600, color: '#57534E' },
-  stateText: { fontSize: '13px', color: '#A8A29E' },
+
   /* Mobile card list */
-  mobileListContainer: { display: 'flex', flexDirection: 'column' as const, gap: '10px' },
-  tableCountMobile: { fontSize: '12px', fontWeight: 600, color: '#A8A29E', marginBottom: '2px' },
-  mobileCard: { background: '#fff', border: '1px solid #EDE8E0', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column' as const, gap: '10px' },
-  mobileCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F5F0E8', paddingBottom: '8px', gap: '8px' },
+  mobileListContainer: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  tableCountMobile: { fontSize: font.sm, fontWeight: 600, color: colors.textDisabled, marginBottom: '2px' },
+  mobileCard: { background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.lg, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  mobileCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${colors.borderLight}`, paddingBottom: '8px', gap: '8px' },
   mobileCardBody: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' },
-  mobileCardFooter: { borderTop: '1px solid #F5F0E8', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  mobileFooterText: { fontSize: '12px', color: '#78716C' },
-  mobileLabelText: { fontSize: '11px', color: '#A8A29E', marginBottom: '2px' },
-  mobileValueText: { fontSize: '15px', fontWeight: 700, color: '#2D7A50' },
-  mobileTimeText: { fontSize: '11px', color: '#A8A29E' },
+  mobileCardFooter: { borderTop: `1px solid ${colors.borderLight}`, paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  mobileFooterText: { fontSize: font.sm, color: colors.textSubtle },
+  mobileLabelText: { fontSize: font.xs, color: colors.textDisabled, marginBottom: '2px' },
+  mobileValueText: { fontSize: font.lg, fontWeight: 700, color: colors.primary },
+  mobileTimeText: { fontSize: font.xs, color: colors.textDisabled },
+
+  /* Pagination */
+  paginationRow: { display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '10px' },
+  pageNumBtn: {
+    minWidth: '34px', padding: '8px', fontSize: font.base, fontWeight: 600,
+    color: colors.textMuted, background: colors.surface, border: `1.5px solid ${colors.border}`,
+    borderRadius: radius.sm, cursor: 'pointer', fontFamily: font.family,
+  },
+  pageNumBtnActive: { background: colors.primary, color: '#fff', border: `1.5px solid ${colors.primary}` },
+  pageEllipsis: { color: colors.textPlaceholder, fontSize: font.base, padding: '0 2px' },
 }
+

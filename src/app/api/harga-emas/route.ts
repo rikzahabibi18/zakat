@@ -2,7 +2,8 @@ export async function GET() {
   try {
     const res = await fetch(
       'https://logam-mulia-api.iamutaki.workers.dev/api/prices/logammulia',
-      { next: { revalidate: 3600 } } // cache 1 jam
+      // cache 24 jam sebagai fallback; refresh presisi dipicu cron jam 01:00 WIB via revalidateTag
+      { next: { revalidate: 86400, tags: ['harga-emas'] } }
     )
 
     if (!res.ok) {
