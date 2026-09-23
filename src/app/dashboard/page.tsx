@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
 import { shared } from '@/styles/shared'
 import { colors, font, gradient, radius } from '@/styles/tokens'
@@ -13,6 +14,25 @@ interface StatCards {
   totalUangSemua: number
   totalBerasSemua: number
   totalMuzakki: number
+  tersalurUang: number
+  tersalurBeras: number
+  sisaSaldoUang: number
+  sisaSaldoBeras: number
+}
+
+function formatGabungan(uang: number, beras: number, satuanLabel: string) {
+  const parts: string[] = []
+  if (uang > 0) parts.push(new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(uang))
+  if (beras > 0) parts.push(`${beras.toFixed(1)} ${satuanLabel}`)
+  return parts.length > 0 ? parts.join(' + ') : 'Rp0'
+}
+
+// Rasio kepadatan beras (standar BAZNAS: 2.5 kg = 3.5 liter) — nilai fisik, tetap.
+// jumlah_beras selalu disimpan dalam Kg di database; ini cuma buat tampilan
+// sesuai satuan yang dipilih lembaga (lihat pengaturan di halaman Profil).
+const LITER_TO_KG = 2.5 / 3.5
+function tampilBeras(kg: number, satuan: 'kg' | 'liter') {
+  return satuan === 'kg' ? kg : kg / LITER_TO_KG
 }
 
 interface TransaksiTerbaru {
@@ -39,20 +59,22 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState('')
   const [userNama, setUserNama] = useState('')
-  const [isMobile, setIsMobile] = useState(false)
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768)
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  const isMobile = useIsMobile()
+  const [satuanBeras, setSatuanBeras] = useState<'kg' | 'liter'>('kg')
 
   useEffect(() => {
     async function fetchData() {
       const { data: { user } } = await supabase.auth.getUser()
       setUserEmail(user?.email ?? '')
       setUserNama(user?.user_metadata?.nama ?? '')
+
+      if (user) {
+        const { data: profil } = await supabase.from('profil_amil').select('lembaga_id').eq('id', user.id).single()
+        if (profil?.lembaga_id) {
+          const { data: lembaga } = await supabase.from('lembaga').select('satuan_beras').eq('id', profil.lembaga_id).single()
+          if (lembaga?.satuan_beras) setSatuanBeras(lembaga.satuan_beras as 'kg' | 'liter')
+        }
+      }
 
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
@@ -85,6 +107,25 @@ export default function DashboardPage() {
         beras: arr?.reduce((a, b) => a + Number(b.jumlah_beras), 0) ?? 0,
       })
 
+      // Saldo Zakat Mal + Fitrah — dua-duanya satu-satunya jenis yang punya
+      // sistem distribusi (lihat /distribusi). Infaq/Fidyah sengaja tidak
+      // ikut dihitung di sini karena belum ada mekanisme penyaluran buat itu.
+      const { data: kategoriMalFitrah } = await supabase
+        .from('kategori_zakat')
+        .select('id')
+        .in('nama_kategori', ['Zakat Mal', 'Zakat Fitrah - Uang', 'Zakat Fitrah - Beras'])
+      const kategoriIds = (kategoriMalFitrah ?? []).map(k => k.id)
+
+      const { data: terkumpulMalFitrah } = kategoriIds.length
+        ? await supabase.from('transaksi').select('jumlah_uang, jumlah_beras').in('kategori_id', kategoriIds)
+        : { data: [] }
+
+      const { data: sesiRows } = await supabase.from('sesi_distribusi').select('total_uang, total_beras')
+      const tersalurUang = (sesiRows ?? []).reduce((a, b) => a + Number(b.total_uang), 0)
+      const tersalurBeras = (sesiRows ?? []).reduce((a, b) => a + Number(b.total_beras), 0)
+
+      const terkumpulMalFitrahSum = sum(terkumpulMalFitrah)
+
       setStats({
         totalUangHariIni: sum(hariIni).uang,
         totalBerasHariIni: sum(hariIni).beras,
@@ -92,6 +133,10 @@ export default function DashboardPage() {
         totalUangSemua: sum(semuaTransaksi).uang,
         totalBerasSemua: sum(semuaTransaksi).beras,
         totalMuzakki: totalMuzakki ?? 0,
+        tersalurUang,
+        tersalurBeras,
+        sisaSaldoUang: Math.max(0, terkumpulMalFitrahSum.uang - tersalurUang),
+        sisaSaldoBeras: Math.max(0, terkumpulMalFitrahSum.beras - tersalurBeras),
       })
 
       setTransaksi((terbaru as unknown as TransaksiTerbaru[]) ?? [])
@@ -102,6 +147,7 @@ export default function DashboardPage() {
 
   const today = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const avatarLetter = (userNama || userEmail).charAt(0).toUpperCase()
+  const satuanLabel = satuanBeras === 'kg' ? 'Kg' : 'Liter'
 
   return (
     <div style={shared.shell}>
@@ -148,7 +194,7 @@ export default function DashboardPage() {
                 gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
               }}>
                 <StatCard label="Uang Masuk" value={formatRupiah(stats?.totalUangHariIni ?? 0)} icon="💵" accent={colors.primary} bg={colors.primaryLight} isMobile={isMobile} />
-                <StatCard label="Beras Masuk" value={`${stats?.totalBerasHariIni?.toFixed(1) ?? '0'} Kg`} icon="🌾" accent={colors.gold} bg={colors.goldBg} isMobile={isMobile} />
+                <StatCard label="Beras Masuk" value={`${tampilBeras(stats?.totalBerasHariIni ?? 0, satuanBeras).toFixed(1)} ${satuanLabel}`} icon="🌾" accent={colors.gold} bg={colors.goldBg} isMobile={isMobile} />
                 <StatCard label="Transaksi" value={`${stats?.totalTransaksiHariIni ?? 0} transaksi`} icon="📋" accent={colors.blue} bg={colors.blueBg} isMobile={isMobile} />
               </div>
             </section>
@@ -161,8 +207,28 @@ export default function DashboardPage() {
                 gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
               }}>
                 <StatCard label="Total Uang Terkumpul" value={formatRupiah(stats?.totalUangSemua ?? 0)} icon="🏦" accent={colors.primary} bg={colors.primaryLight} isMobile={isMobile} />
-                <StatCard label="Total Beras Terkumpul" value={`${stats?.totalBerasSemua?.toFixed(1) ?? '0'} Kg`} icon="🌾" accent={colors.gold} bg={colors.goldBg} isMobile={isMobile} />
+                <StatCard label="Total Beras Terkumpul" value={`${tampilBeras(stats?.totalBerasSemua ?? 0, satuanBeras).toFixed(1)} ${satuanLabel}`} icon="🌾" accent={colors.gold} bg={colors.goldBg} isMobile={isMobile} />
                 <StatCard label="Total Muzakki" value={`${stats?.totalMuzakki ?? 0} orang`} icon="👥" accent={colors.purple} bg={colors.purpleBg} isMobile={isMobile} />
+              </div>
+            </section>
+
+            {/* Section Saldo Distribusi (Zakat Mal + Fitrah) */}
+            <section style={{ marginTop: isMobile ? '24px' : '32px' }}>
+              <p style={{ ...shared.sectionLabel, marginBottom: '12px' }}>SALDO ZAKAT MAL + FITRAH</p>
+              <div style={{
+                ...s.cardGrid,
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+              }}>
+                <StatCard
+                  label="Sudah Disalurkan"
+                  value={formatGabungan(stats?.tersalurUang ?? 0, tampilBeras(stats?.tersalurBeras ?? 0, satuanBeras), satuanLabel)}
+                  icon="📤" accent={colors.blue} bg={colors.blueBg} isMobile={isMobile}
+                />
+                <StatCard
+                  label="Sisa Saldo"
+                  value={formatGabungan(stats?.sisaSaldoUang ?? 0, tampilBeras(stats?.sisaSaldoBeras ?? 0, satuanBeras), satuanLabel)}
+                  icon="💰" accent={colors.primary} bg={colors.primaryLight} isMobile={isMobile}
+                />
               </div>
             </section>
 
@@ -191,7 +257,7 @@ export default function DashboardPage() {
                         <div>
                           <p style={s.mobileLabelText}>Jumlah</p>
                           <p style={s.mobileValueText}>
-                            {t.jumlah_uang > 0 ? formatRupiah(t.jumlah_uang) : `${t.jumlah_beras} Kg`}
+                            {t.jumlah_uang > 0 ? formatRupiah(t.jumlah_uang) : `${tampilBeras(t.jumlah_beras, satuanBeras).toFixed(1)} ${satuanLabel}`}
                           </p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
@@ -219,7 +285,7 @@ export default function DashboardPage() {
                           <td style={shared.td}><span style={s.muzakkiName}>{t.muzakki?.nama ?? '—'}</span></td>
                           <td style={shared.td}><span style={s.badge}>{t.kategori_zakat?.nama_kategori ?? '—'}</span></td>
                           <td style={{ ...shared.td, ...s.tdNum }}>{t.jumlah_uang > 0 ? formatRupiah(t.jumlah_uang) : '—'}</td>
-                          <td style={{ ...shared.td, ...s.tdNum }}>{t.jumlah_beras > 0 ? `${t.jumlah_beras} Kg` : '—'}</td>
+                          <td style={{ ...shared.td, ...s.tdNum }}>{t.jumlah_beras > 0 ? `${tampilBeras(t.jumlah_beras, satuanBeras).toFixed(1)} ${satuanLabel}` : '—'}</td>
                           <td style={{ ...shared.td, color: colors.textSubtle }}>{t.amil_pencatat ?? '—'}</td>
                           <td style={{ ...shared.td, color: colors.textDisabled, whiteSpace: 'nowrap' }}>{formatTanggal(t.tanggal)}</td>
                         </tr>

@@ -1,8 +1,9 @@
 'use client'
 
-import React, { Suspense, useEffect, useState } from 'react'
+import React, { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
 import QRConfirmModal from '@/components/QRConfirmModal'
 import StrukModal from '@/components/StrukModal'
@@ -18,17 +19,6 @@ const FIDYAH_PER_HARI = 65000
 
 function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
-}
-
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    function check() { setIsMobile(window.innerWidth < breakpoint) }
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [breakpoint])
-  return isMobile
 }
 
 function FidyahForm() {

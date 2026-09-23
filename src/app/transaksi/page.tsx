@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
 import { shared } from '@/styles/shared'
 import { colors, font, radius } from '@/styles/tokens'
@@ -30,6 +31,14 @@ function normKategori(nama: string | undefined): string {
   if (!nama) return '—'
   if (nama.startsWith('Zakat Fitrah')) return 'Zakat Fitrah'
   return nama
+}
+
+// Rasio kepadatan beras (standar BAZNAS: 2.5 kg = 3.5 liter) — nilai fisik, tetap.
+// jumlah_beras selalu disimpan dalam Kg di database; ini cuma buat tampilan
+// sesuai satuan yang dipilih lembaga (lihat pengaturan di halaman Profil).
+const LITER_TO_KG = 2.5 / 3.5
+function tampilBeras(kg: number, satuan: 'kg' | 'liter') {
+  return satuan === 'kg' ? kg : kg / LITER_TO_KG
 }
 
 function formatRupiah(n: number) {
@@ -64,7 +73,8 @@ function formatTanggal(iso: string) {
   return new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function exportToExcel(data: Transaksi[]) {
+function exportToExcel(data: Transaksi[], satuanBeras: 'kg' | 'liter') {
+  const labelSatuan = satuanBeras === 'kg' ? 'Kg' : 'Liter'
   const rows = data.map((t, i) => ({
     'No': i + 1,
     'Waktu': formatTanggal(t.tanggal),
@@ -72,7 +82,7 @@ function exportToExcel(data: Transaksi[]) {
     'Kategori': normKategori(t.kategori_zakat?.nama_kategori),
     'Metode': t.metode_pembayaran,
     'Jumlah Uang (Rp)': t.jumlah_uang > 0 ? t.jumlah_uang : '',
-    'Jumlah Beras (Kg)': t.jumlah_beras > 0 ? t.jumlah_beras : '',
+    [`Jumlah Beras (${labelSatuan})`]: t.jumlah_beras > 0 ? Math.round(tampilBeras(t.jumlah_beras, satuanBeras) * 100) / 100 : '',
     'Dicatat Oleh': t.amil_pencatat ?? '—',
   }))
 
@@ -92,18 +102,22 @@ export default function TransaksiPage() {
   const [filterMetode, setFilterMetode] = useState('Semua')
   const [filterKategori, setFilterKategori] = useState('Semua')
   const [kategoriList, setKategoriList] = useState<string[]>([])
-  const [isMobile, setIsMobile] = useState(false)
+  const isMobile = useIsMobile()
   const [page, setPage] = useState(1)
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768)
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  const [satuanBeras, setSatuanBeras] = useState<'kg' | 'liter'>('kg')
 
   async function fetchData() {
     setLoading(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profil } = await supabase.from('profil_amil').select('lembaga_id').eq('id', user.id).single()
+      if (profil?.lembaga_id) {
+        const { data: lembaga } = await supabase.from('lembaga').select('satuan_beras').eq('id', profil.lembaga_id).single()
+        if (lembaga?.satuan_beras) setSatuanBeras(lembaga.satuan_beras as 'kg' | 'liter')
+      }
+    }
+
     const { data: rows } = await supabase
       .from('transaksi')
       .select(`
@@ -146,6 +160,7 @@ export default function TransaksiPage() {
 
   const totalUang = filtered.reduce((a, b) => a + Number(b.jumlah_uang), 0)
   const totalBeras = filtered.reduce((a, b) => a + Number(b.jumlah_beras), 0)
+  const satuanLabel = satuanBeras === 'kg' ? 'Kg' : 'Liter'
 
   const hasActiveFilter = !!(search || filterMetode !== 'Semua' || filterKategori !== 'Semua')
 
@@ -186,7 +201,7 @@ export default function TransaksiPage() {
           }}>
             {!loading && filtered.length > 0 && (
               <button
-                onClick={() => exportToExcel(filtered)}
+                onClick={() => exportToExcel(filtered, satuanBeras)}
                 style={{
                   ...shared.btnSecondary,
                   width: isMobile ? '100%' : 'auto',
@@ -237,7 +252,7 @@ export default function TransaksiPage() {
             </div>
             <div style={{ ...s.summaryCard, background: colors.goldBg, border: `1.5px solid ${colors.goldBorder}22` }}>
               <p style={s.summaryLabel}>Total Beras</p>
-              <p style={{ ...s.summaryValue, color: colors.gold, fontSize: isMobile ? '16px' : '20px' }}>{totalBeras.toFixed(1)} Kg</p>
+              <p style={{ ...s.summaryValue, color: colors.gold, fontSize: isMobile ? '16px' : '20px' }}>{tampilBeras(totalBeras, satuanBeras).toFixed(1)} {satuanLabel}</p>
             </div>
           </div>
         )}
@@ -338,7 +353,7 @@ export default function TransaksiPage() {
                     <div>
                       <p style={s.mobileLabelText}>Jumlah</p>
                       <p style={s.mobileValueText}>
-                        {t.jumlah_uang > 0 ? formatRupiah(t.jumlah_uang) : t.jumlah_beras > 0 ? `${t.jumlah_beras} Kg` : '—'}
+                        {t.jumlah_uang > 0 ? formatRupiah(t.jumlah_uang) : t.jumlah_beras > 0 ? `${tampilBeras(t.jumlah_beras, satuanBeras).toFixed(1)} ${satuanLabel}` : '—'}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -390,7 +405,7 @@ export default function TransaksiPage() {
                         {t.jumlah_uang > 0 ? formatRupiah(t.jumlah_uang) : <span style={s.emptyCell}>—</span>}
                       </td>
                       <td style={{ ...shared.td, ...s.tdNum }}>
-                        {t.jumlah_beras > 0 ? `${t.jumlah_beras} Kg` : <span style={s.emptyCell}>—</span>}
+                        {t.jumlah_beras > 0 ? `${tampilBeras(t.jumlah_beras, satuanBeras).toFixed(1)} ${satuanLabel}` : <span style={s.emptyCell}>—</span>}
                       </td>
                       <td style={{ ...shared.td, color: colors.textSubtle, fontSize: font.sm }}>{t.amil_pencatat ?? '—'}</td>
                     </tr>

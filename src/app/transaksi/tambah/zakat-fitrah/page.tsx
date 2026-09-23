@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
 import QRConfirmModal from '@/components/QRConfirmModal'
 import StrukModal from '@/components/StrukModal'
@@ -17,13 +18,10 @@ type SatuanBeras = 'kg' | 'liter'
 const METODE_LIST: Metode[] = ['Tunai', 'Transfer Bank', 'QRIS', 'Beras']
 const METODE_ICON: Record<Metode, string> = { Tunai: '💵', 'Transfer Bank': '🏦', QRIS: '📱', Beras: '🌾' }
 
-// Konstanta BAZNAS
-const FITRAH_UANG = 45000
-const FITRAH_KG = 2.5
-const FITRAH_LITER = 3.5
-// Rate konversi ke Kg (base untuk semua kalkulasi uang)
-const RATE_PER_KG = FITRAH_UANG / FITRAH_KG       // 18.000 per Kg
-const LITER_TO_KG = FITRAH_KG / FITRAH_LITER       // ≈ 0.7143 Kg per Liter
+// Rasio kepadatan beras (standar BAZNAS: 2.5 kg = 3.5 liter) — nilai fisik, tetap.
+// Berat & harga per-jiwa sendiri sekarang dikustomisasi per lembaga (lihat halaman Profil),
+// tapi rasio konversi kg<->liter ini tidak berubah.
+const LITER_TO_KG = 2.5 / 3.5 // ≈ 0.7143 Kg per Liter
 
 function formatRupiah(n: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
@@ -33,17 +31,6 @@ function formatInput(val: string) {
   return digits ? Number(digits).toLocaleString('id-ID') : ''
 }
 function parseInput(val: string) { return Number(val.replace(/\D/g, '')) }
-
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    function check() { setIsMobile(window.innerWidth < breakpoint) }
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [breakpoint])
-  return isMobile
-}
 
 function ZakatFitrahForm() {
   const router = useRouter()
@@ -65,13 +52,15 @@ function ZakatFitrahForm() {
   const [qrData, setQrData] = useState<{ id: number; nominal: string } | null>(null)
   const [struk, setStruk] = useState<{ id: number; tanggal: string } | null>(null)
 
-  // Setting satuan dari lembaga
+  // Setting dari lembaga — satuan, berat & harga beras per jiwa (dikustomisasi di halaman Profil)
   const [satuanBeras, setSatuanBeras] = useState<SatuanBeras>('kg')
+  const [fitrahKg, setFitrahKg] = useState(2.5)
+  const [hargaPerKg, setHargaPerKg] = useState(18000)
   const [loadingSatuan, setLoadingSatuan] = useState(true)
 
-  // Fetch satuan_beras dari lembaga saat mount
+  // Fetch pengaturan lembaga saat mount
   useEffect(() => {
-    async function fetchSatuan() {
+    async function fetchLembagaSettings() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoadingSatuan(false); return }
 
@@ -80,19 +69,26 @@ function ZakatFitrahForm() {
 
       if (profil?.lembaga_id) {
         const { data: lembaga } = await supabase
-          .from('lembaga').select('satuan_beras').eq('id', profil.lembaga_id).single()
-        if (lembaga?.satuan_beras) {
-          setSatuanBeras(lembaga.satuan_beras as SatuanBeras)
-        }
+          .from('lembaga')
+          .select('satuan_beras, zakat_fitrah_kg, harga_beras_per_kg')
+          .eq('id', profil.lembaga_id)
+          .single()
+        if (lembaga?.satuan_beras) setSatuanBeras(lembaga.satuan_beras as SatuanBeras)
+        if (lembaga?.zakat_fitrah_kg) setFitrahKg(lembaga.zakat_fitrah_kg)
+        if (lembaga?.harga_beras_per_kg) setHargaPerKg(lembaga.harga_beras_per_kg)
       }
       setLoadingSatuan(false)
     }
-    fetchSatuan()
+    fetchLembagaSettings()
   }, [])
+
+  // Nilai per-jiwa diturunkan dari pengaturan lembaga (bukan konstanta lagi)
+  const fitrahLiter = fitrahKg / LITER_TO_KG
+  const fitrahUang = fitrahKg * hargaPerKg
 
   // Label satuan yang dinamis
   const satuanLabel = satuanBeras === 'kg' ? 'Kg' : 'Liter'
-  const fitrahPerJiwa = satuanBeras === 'kg' ? FITRAH_KG : FITRAH_LITER
+  const fitrahPerJiwa = satuanBeras === 'kg' ? fitrahKg : fitrahLiter
 
   // ── Semua kalkulasi dikonversi ke Kg dulu sebagai base ──
   const jiwaNum = Number(jumlahJiwa)
@@ -106,16 +102,16 @@ function ZakatFitrahForm() {
 
   // Final values yang disimpan ke DB (selalu dalam Kg)
   const finalUang: number = (() => {
-    if (opsi === 'jiwa')    return jiwaNum * FITRAH_UANG
+    if (opsi === 'jiwa')    return jiwaNum * fitrahUang
     if (opsi === 'nominal') return nominalNum
-    if (opsi === 'beras')   return Math.round(berasInputInKg * RATE_PER_KG)
+    if (opsi === 'beras')   return Math.round(berasInputInKg * hargaPerKg)
     return 0
   })()
 
   // jumlah_beras di DB selalu dalam Kg
   const finalBerasKg: number = (() => {
-    if (opsi === 'jiwa')    return jiwaNum * FITRAH_KG
-    if (opsi === 'nominal') return parseFloat((nominalNum / RATE_PER_KG).toFixed(3))
+    if (opsi === 'jiwa')    return jiwaNum * fitrahKg
+    if (opsi === 'nominal') return parseFloat((nominalNum / hargaPerKg).toFixed(3))
     if (opsi === 'beras')   return parseFloat(berasInputInKg.toFixed(3))
     return 0
   })()
@@ -256,7 +252,7 @@ function ZakatFitrahForm() {
               <div style={{ ...s.cardHeader, padding: cardPad }}>
                 <h2 style={{ ...s.cardTitle, fontSize: isMobile ? '15.5px' : font.h3 }}>Kalkulasi Zakat Fitrah</h2>
                 <p style={s.cardSub}>
-                  Standar Jabodetabek — {formatRupiah(FITRAH_UANG)} atau {fitrahPerJiwa} {satuanLabel} per jiwa
+                  Standar lembaga — {formatRupiah(fitrahUang)} atau {Math.round(fitrahPerJiwa * 100) / 100} {satuanLabel} per jiwa
                 </p>
               </div>
               <div style={{ ...shared.cardBody, padding: bodyPad }}>
@@ -266,11 +262,11 @@ function ZakatFitrahForm() {
                   <div style={{ ...shared.infoGrid, gap: isMobile ? '10px' : '12px' }}>
                     <div>
                       <p style={shared.infoLabel}>Standar Uang / jiwa</p>
-                      <p style={{ ...shared.infoValue, fontSize: isMobile ? '13.5px' : font.lg }}>{formatRupiah(FITRAH_UANG)}</p>
+                      <p style={{ ...shared.infoValue, fontSize: isMobile ? '13.5px' : font.lg }}>{formatRupiah(fitrahUang)}</p>
                     </div>
                     <div>
                       <p style={shared.infoLabel}>Standar Beras / jiwa</p>
-                      <p style={{ ...shared.infoValue, fontSize: isMobile ? '13.5px' : font.lg }}>{fitrahPerJiwa} {satuanLabel}</p>
+                      <p style={{ ...shared.infoValue, fontSize: isMobile ? '13.5px' : font.lg }}>{Math.round(fitrahPerJiwa * 100) / 100} {satuanLabel}</p>
                     </div>
                   </div>
                   {/* Badge satuan aktif */}

@@ -86,12 +86,17 @@ app/
     tambah/
       fidyah/ infaq/ zakat-fitrah/ zakat-mal/
   konfirmasi/[id]/    ← halaman PUBLIK (tanpa Sidebar), dibuka muzakki setelah scan QR
+  distribusi/
+    _lib.ts           ← tipe & helper lokal khusus fitur distribusi (bukan shared/ global)
+    [id]/             ← detail sesi: status penerimaan per orang + tanda terima
   api/
     harga-emas/       ← proxy route untuk Gold Price API (bypass CORS)
 components/
   Sidebar.tsx
   QRConfirmModal.tsx
   StrukModal.tsx
+hooks/
+  useIsMobile.ts      ← satu-satunya custom hook bersama di project ini (lihat "Deteksi Mobile")
 styles/
   tokens.ts           ← nilai mentah: colors, font, radius, shadow, gradient, spacing
   shared/              ← style siap pakai (lihat section Design System di bawah)
@@ -100,14 +105,13 @@ utils/
     client.ts         ← Supabase client-side
     server.ts         ← Supabase server-side (SSR)
 ```
-> Catatan: tidak ada route group `(dashboard)`, folder `hooks/`, atau `lib/supabaseClient.ts` — struktur di atas yang aktual per 2026-08-26.
+> Catatan: tidak ada route group `(dashboard)` atau `lib/supabaseClient.ts` — struktur di atas yang aktual per 2026-09-18 (folder `hooks/` baru ditambahkan tanggal ini, lihat di bawah).
 
 ### Deteksi Mobile
-- **Belum ada hook bersama.** Implementasinya berbeda-beda per file:
-  - `transaksi/tambah/*` — punya fungsi lokal `useIsMobile(breakpoint = 768)` di file yang sama
-  - `muzakki`, `mustahik`, `transaksi`, `dashboard`, `login`, `Sidebar`, `profil` — pakai `useState` + `useEffect` resize listener langsung tanpa nama hook
-  - Breakpoint konsisten di semua: `768px`
-  - Kalau butuh dipakai di banyak tempat baru, pertimbangkan ekstrak ke `hooks/useIsMobile.ts` supaya tidak duplikat — belum dilakukan sampai sekarang
+- **Sudah ada satu hook bersama:** `src/hooks/useIsMobile.ts`, dipakai lewat `import { useIsMobile } from '@/hooks/useIsMobile'` di semua halaman yang butuh deteksi mobile (dashboard, login, muzakki, mustahik, transaksi, transaksi/tambah + subhalamannya, distribusi + subhalamannya, profil, panel-zakat, Sidebar).
+- Ini pengecualian dari prinsip "duplikasi antar halaman" yang berlaku di bagian lain codebase — layak di-share karena isinya benar-benar identik di semua tempat dan tidak ada alasan bisnis buat beda per halaman (beda dengan `formatTanggal` dkk yang sengaja diduplikasi karena berpotensi butuh nuansa per halaman).
+- Breakpoint: `window.innerWidth <= 768` → mobile (konsisten di satu tempat sekarang, defaultnya `breakpoint = 768` tapi bisa di-override lewat argumen).
+- Kalau nemu logic serupa (identik persis, tanpa variasi bisnis) di banyak tempat, pertimbangkan pola yang sama: tarik ke `hooks/` bukan diduplikasi lagi.
 
 ### Pola Umum
 
@@ -262,4 +266,4 @@ useEffect(() => { fetchData(); }, []);
 
 ---
 
-*Last updated: 2026-08-26 — struktur folder, hooks, dan design system diverifikasi ulang terhadap kode aktual setelah refactor CSS ke `tokens.ts`/`shared/`*
+*Last updated: 2026-09-18 — `useIsMobile` dikonsolidasi jadi satu hook bersama di `src/hooks/useIsMobile.ts` (sebelumnya duplikat manual di 13+ file); lihat "Deteksi Mobile" di atas.*

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { colors, font, gradient, radius, shadow, spacing } from '@/styles/tokens'
 
 const navItems = [
@@ -60,6 +61,15 @@ const navItems = [
       </svg>
     ),
   },
+  {
+    href: '/distribusi',
+    label: 'Distribusi',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <path d="M2 6l7-3.5L16 6M2 6v8l7 3 7-3V6M2 6l7 3 7-3M9 9v8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
 ]
 
 export default function Sidebar() {
@@ -67,20 +77,13 @@ export default function Sidebar() {
   const router = useRouter()
   const supabase = createClient()
 
-  const [isMobile, setIsMobile] = useState(false)
+  const isMobile = useIsMobile()
   const [isOpen, setIsOpen] = useState(false)
   const [prevPathname, setPrevPathname] = useState(pathname)
   if (pathname !== prevPathname) {
     setPrevPathname(pathname)
     setIsOpen(false)
   }
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768)
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   // Lock scroll body saat sidebar mobile terbuka
   useEffect(() => {
