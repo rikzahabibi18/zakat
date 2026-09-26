@@ -6,6 +6,7 @@ import { colors, font, gradient, radius } from '@/styles/tokens'
 
 interface StrukData {
   transaksiId: number
+  nomorUrut: number
   tanggal: string
   muzakkiNama: string
   jenisZakat: string
@@ -65,7 +66,9 @@ async function downloadStruk(data: StrukData) {
   line()
 
   // Info transaksi
-  row('No. Transaksi', `#${data.transaksiId}`)
+  // Nomor urut per-lembaga (mulai dari 1), BUKAN id global tabel transaksi --
+  // supaya lembaga baru mulai dari #01, bukan lanjut dari angka lembaga lain.
+  row('No. Transaksi', `#${String(data.nomorUrut).padStart(2, '0')}`)
   row('Tanggal', formatTanggal(data.tanggal))
   y += 1
   line()

@@ -19,6 +19,10 @@ alter table public.kode_registrasi enable row level security;
 -- Tabel ini TIDAK PERNAH diakses langsung dari client.
 
 -- 2. Trigger: link auth.users baru -> profil_amil, baca kode dari signup metadata
+-- Kalau metadata kode_registrasi sama sekali nggak ada (akun dibuat manual
+-- lewat Supabase Dashboard, misal superadmin@email.com), biarkan lolos tanpa
+-- di-link ke lembaga manapun -- cuma akun yang BENERAN kirim kode (lewat
+-- /register) yang divalidasi & wajib benar.
 create or replace function public.handle_new_amil_registration()
 returns trigger
 language plpgsql
@@ -29,6 +33,10 @@ declare
   v_kode text;
   v_lembaga_id bigint;
 begin
+  if new.raw_user_meta_data is null or not (new.raw_user_meta_data ? 'kode_registrasi') then
+    return new;
+  end if;
+
   v_kode := upper(trim(new.raw_user_meta_data->>'kode_registrasi'));
 
   if v_kode is null or v_kode = '' then

@@ -14,14 +14,14 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data } = await admin
     .from('kode_registrasi')
-    .select('kode, lembaga:lembaga_id ( nama )')
+    .select('kode, lembaga:lembaga_id ( nama, slug )')
     .eq('kode', normalized)
     .single()
 
-  const lembaga = data?.lembaga as unknown as { nama: string } | null
+  const lembaga = data?.lembaga as unknown as { nama: string; slug: string } | null
   if (!data || !lembaga) {
     return Response.json({ valid: false })
   }
 
-  return Response.json({ valid: true, lembagaNama: lembaga.nama })
+  return Response.json({ valid: true, lembagaNama: lembaga.nama, lembagaSlug: lembaga.slug })
 }

@@ -8,6 +8,18 @@ function generateKode(len = 16) {
   return Array.from({ length: len }, () => ALPHABET[randomInt(ALPHABET.length)]).join('')
 }
 
+// Slug dasar buat URL tenant (myzakat.id/nama-lembaga/dashboard) -- keunikan
+// (kalau ada nama lembaga yang sama) ditangani di dalam RPC lewat suffix
+// angka, bukan di sini.
+function slugify(nama: string) {
+  const slug = nama
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || 'lembaga'
+}
+
 async function assertSuperAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -22,7 +34,7 @@ export async function GET() {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('lembaga')
-    .select('id, nama, alamat, satuan_beras, kode_registrasi ( kode )')
+    .select('id, nama, alamat, satuan_beras, slug, kode_registrasi ( kode )')
     .order('nama', { ascending: true })
 
   if (error) {
@@ -44,6 +56,7 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
+  const slugDasar = slugify(nama.trim())
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const kode = generateKode()
@@ -52,16 +65,21 @@ export async function POST(req: Request) {
       p_alamat: alamat?.trim() || null,
       p_satuan_beras: satuan_beras ?? 'kg',
       p_kode: kode,
+      p_slug_dasar: slugDasar,
     })
 
     if (!error) {
       const row = Array.isArray(data) ? data[0] : data
-      return Response.json({ lembagaId: row.lembaga_id, kode: row.kode })
+      return Response.json({ lembagaId: row.lembaga_id, kode: row.kode, slug: row.slug })
     }
 
     // 23505 = unique_violation (kode bentrok) -> coba lagi dengan kode baru
     if (error.code !== '23505') {
-      return Response.json({ error: 'Gagal membuat lembaga.' }, { status: 500 })
+      console.error('[panel-zakat/lembaga POST]', error)
+      return Response.json(
+        { error: 'Gagal membuat lembaga.', detail: error.message, code: error.code },
+        { status: 500 }
+      )
     }
   }
 

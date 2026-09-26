@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { shared } from '@/styles/shared'
@@ -15,6 +16,7 @@ export default function RegisterPage() {
   const [step, setStep] = useState<Step>('kode')
   const [kode, setKode] = useState('')
   const [lembagaNama, setLembagaNama] = useState('')
+  const [lembagaSlug, setLembagaSlug] = useState('')
   const [nama, setNama] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -39,6 +41,7 @@ export default function RegisterPage() {
         return
       }
       setLembagaNama(json.lembagaNama)
+      setLembagaSlug(json.lembagaSlug)
       setStep('data')
     } catch {
       setError('Gagal memeriksa kode. Coba lagi.')
@@ -73,7 +76,7 @@ export default function RegisterPage() {
       return
     }
 
-    router.push('/dashboard')
+    router.push(`/${lembagaSlug}/dashboard`)
   }
 
   return (
@@ -159,7 +162,7 @@ export default function RegisterPage() {
           )}
 
           <p style={s.footerNote}>
-            Sudah punya akun? <a href="/login" style={s.footerLink}>Masuk di sini</a>
+            Sudah punya akun? <Link href="/login" style={s.footerLink}>Masuk di sini</Link>
           </p>
         </div>
       </div>

@@ -33,3 +33,6 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/
+
+# catatan keamanan lokal - jangan pernah ikut ke-commit
+PANDUAN_KEAMANAN_PRA_RILIS.txt
