@@ -1,8 +1,9 @@
 import { createServerClient, type CookieMethodsServer } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { SUPER_ADMIN_EMAIL } from '@/utils/supabase/superAdmin'
 
-const PROTECTED_ROUTES = ['/dashboard', '/transaksi', '/muzakki', '/profil']
-const PUBLIC_ROUTES = ['/login', '/konfirmasi']
+const PROTECTED_ROUTES = ['/dashboard', '/transaksi', '/muzakki', '/profil', '/mustahik', '/distribusi', '/panel-zakat']
+const PUBLIC_ROUTES = ['/login', '/konfirmasi', '/register']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -45,6 +46,10 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
+  }
+
+  if (pathname.startsWith('/panel-zakat') && user.email !== SUPER_ADMIN_EMAIL) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return response

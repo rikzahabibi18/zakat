@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
 import { shared } from '@/styles/shared'
 import { colors, font } from '@/styles/tokens'
@@ -18,17 +19,6 @@ interface MuzakkiBaru {
   nama: string
   nomor_hp: string
   alamat: string
-}
-
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    function check() { setIsMobile(window.innerWidth < breakpoint) }
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [breakpoint])
-  return isMobile
 }
 
 function TambahContent() {
@@ -179,7 +169,7 @@ function TambahContent() {
         }}>
           <div>
             <h1 style={{ ...shared.headerTitle, fontSize: isMobile ? font.h2 : font.h1 }}>
-              Catat Zakat
+              Catat ZIS
             </h1>
             <p style={shared.headerSub}>Langkah {step} dari 2</p>
           </div>
@@ -362,9 +352,11 @@ function TambahContent() {
                 <label style={shared.label}>Nomor HP</label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={13}
                   placeholder="08xxxxxxxxxx (opsional)"
                   value={modalForm.nomor_hp}
-                  onChange={e => setModalForm(f => ({ ...f, nomor_hp: e.target.value }))}
+                  onChange={e => setModalForm(f => ({ ...f, nomor_hp: e.target.value.replace(/\D/g, '').slice(0, 13) }))}
                   style={{ ...shared.input, fontSize: isMobile ? font.xl : font.md }}
                 />
               </div>

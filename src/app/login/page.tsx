@@ -1,7 +1,8 @@
 'use client'
 
-import React, { Suspense, useState, useEffect } from 'react'
+import React, { Suspense, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { colors, font, gradient, radius } from '@/styles/tokens'
 
@@ -117,19 +118,18 @@ function LoginForm() {
       </div>
 
       <p style={styles.footerNote}>Lupa akses? Hubungi administrator sistem Anda.</p>
+      <p style={styles.footerNote}>
+        Punya kode registrasi lembaga?{' '}
+        <a href="/register" style={{ color: colors.primary, fontWeight: 600, textDecoration: 'none' }}>
+          Daftar di sini
+        </a>
+      </p>
     </div>
   )
 }
 
 export default function LoginPage() {
-  const [isMobile, setIsMobile] = useState(false)
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768)
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  const isMobile = useIsMobile()
 
   return (
     <div style={{

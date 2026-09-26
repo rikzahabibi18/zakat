@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
 import { shared } from '@/styles/shared'
 import { colors, font } from '@/styles/tokens'
@@ -25,20 +26,13 @@ export default function MuzakkiPage() {
   const [data, setData] = useState<Muzakki[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)
+  const isMobile = useIsMobile()
 
   // Modal state
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ nama: '', nomor_hp: '', alamat: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768)
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   async function fetchData() {
     setLoading(true)
@@ -283,9 +277,11 @@ export default function MuzakkiPage() {
                 <label style={shared.label}>Nomor HP</label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={13}
                   placeholder="08xxxxxxxxxx"
                   value={form.nomor_hp}
-                  onChange={e => setForm(f => ({ ...f, nomor_hp: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, nomor_hp: e.target.value.replace(/\D/g, '').slice(0, 13) }))}
                   style={shared.input}
                 />
               </div>

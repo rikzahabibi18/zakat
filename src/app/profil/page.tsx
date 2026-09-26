@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
 import { shared } from '@/styles/shared'
 import { colors, font } from '@/styles/tokens'
@@ -17,18 +18,13 @@ interface LembagaForm {
   nama: string
   alamat: string
   satuan_beras: 'kg' | 'liter'
+  zakat_fitrah_kg: number
+  harga_beras_per_kg: number
 }
 
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    function check() { setIsMobile(window.innerWidth < breakpoint) }
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [breakpoint])
-  return isMobile
-}
+// Rasio kepadatan beras (standar BAZNAS: 2.5 kg = 3.5 liter) — nilai fisik, tetap.
+const DENSITY_LITER_PER_KG = 3.5 / 2.5 // = 1.4
+const DENSITY_KG_PER_LITER = 2.5 / 3.5 // ≈ 0.7143
 
 export default function ProfilPage() {
   const supabase = createClient()
@@ -38,7 +34,7 @@ export default function ProfilPage() {
     nama: '', email: '', passwordBaru: '', konfirmasiPassword: '',
   })
   const [lembagaForm, setLembagaForm] = useState<LembagaForm>({
-    nama: '', alamat: '', satuan_beras: 'kg',
+    nama: '', alamat: '', satuan_beras: 'kg', zakat_fitrah_kg: 2.5, harga_beras_per_kg: 18000,
   })
   const [lembagaId, setLembagaId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -76,7 +72,7 @@ export default function ProfilPage() {
 
           const { data: lembaga } = await supabase
             .from('lembaga')
-            .select('nama, alamat, satuan_beras')
+            .select('nama, alamat, satuan_beras, zakat_fitrah_kg, harga_beras_per_kg')
             .eq('id', profil.lembaga_id)
             .single()
 
@@ -85,6 +81,8 @@ export default function ProfilPage() {
               nama: lembaga.nama ?? '',
               alamat: lembaga.alamat ?? '',
               satuan_beras: (lembaga.satuan_beras ?? 'kg') as 'kg' | 'liter',
+              zakat_fitrah_kg: lembaga.zakat_fitrah_kg ?? 2.5,
+              harga_beras_per_kg: lembaga.harga_beras_per_kg ?? 18000,
             })
           }
         }
@@ -160,7 +158,11 @@ export default function ProfilPage() {
 
     const { error } = await supabase
       .from('lembaga')
-      .update({ satuan_beras: lembagaForm.satuan_beras })
+      .update({
+        satuan_beras: lembagaForm.satuan_beras,
+        zakat_fitrah_kg: lembagaForm.zakat_fitrah_kg,
+        harga_beras_per_kg: lembagaForm.harga_beras_per_kg,
+      })
       .eq('id', lembagaId)
 
     setSavingPengaturan(false)
@@ -170,10 +172,36 @@ export default function ProfilPage() {
 
   const avatarLetter = (form.nama || form.email).charAt(0).toUpperCase()
 
-  const FITRAH_KG = 2.5
-  const FITRAH_LITER = 3.5
+  // ── Semua nilai di bawah diturunkan dari 2 sumber kebenaran:
+  //    lembagaForm.zakat_fitrah_kg & lembagaForm.harga_beras_per_kg ──
+  const fitrahKg = lembagaForm.zakat_fitrah_kg
+  const fitrahLiter = fitrahKg * DENSITY_LITER_PER_KG
+  const hargaPerKg = lembagaForm.harga_beras_per_kg
+  const hargaPerLiter = hargaPerKg * DENSITY_KG_PER_LITER
+  const standarUangPerJiwa = fitrahKg * hargaPerKg
+
   const satuanLabel = lembagaForm.satuan_beras === 'kg' ? 'Kg' : 'Liter'
-  const satuanFitrah = lembagaForm.satuan_beras === 'kg' ? FITRAH_KG : FITRAH_LITER
+  const satuanFitrah = lembagaForm.satuan_beras === 'kg' ? fitrahKg : fitrahLiter
+
+  function formatRupiah(n: number) {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
+  }
+
+  // Catatan: nilai kg TIDAK dibulatkan di sini (disimpan presisi penuh) —
+  // supaya hitungan uang (kg × harga) tetap akurat. Pembulatan cuma dilakukan
+  // saat menampilkan di kotak input (lihat value={... ? Math.round(...) : ''}).
+  function handleFitrahKgChange(val: number) {
+    setLembagaForm(f => ({ ...f, zakat_fitrah_kg: val }))
+  }
+  function handleFitrahLiterChange(val: number) {
+    setLembagaForm(f => ({ ...f, zakat_fitrah_kg: val * DENSITY_KG_PER_LITER }))
+  }
+  function handleHargaKgChange(val: number) {
+    setLembagaForm(f => ({ ...f, harga_beras_per_kg: Math.round(val) }))
+  }
+  function handleHargaLiterChange(val: number) {
+    setLembagaForm(f => ({ ...f, harga_beras_per_kg: Math.round(val * DENSITY_LITER_PER_KG) }))
+  }
 
   return (
     <div style={shared.shell}>
@@ -279,8 +307,8 @@ export default function ProfilPage() {
                 {/* Toggle Kg vs Liter */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   {([
-                    { key: 'kg',    icon: '⚖️', label: 'Kilogram (Kg)', desc: `${FITRAH_KG} Kg per jiwa` },
-                    { key: 'liter', icon: '🪣', label: 'Liter',          desc: `${FITRAH_LITER} Liter per jiwa` },
+                    { key: 'kg',    icon: '⚖️', label: 'Kilogram (Kg)', desc: `${Math.round(fitrahKg * 100) / 100} Kg per jiwa` },
+                    { key: 'liter', icon: '🪣', label: 'Liter',          desc: `${Math.round(fitrahLiter * 100) / 100} Liter per jiwa` },
                   ] as const).map(o => (
                     <button key={o.key}
                       onClick={() => setLembagaForm(f => ({ ...f, satuan_beras: o.key }))}
@@ -300,33 +328,85 @@ export default function ProfilPage() {
                   ))}
                 </div>
 
-                {/* Preview konversi */}
+                {/* Berat beras per jiwa — bisa dikustomisasi, kg & liter saling sinkron */}
+                <div style={shared.field}>
+                  <label style={shared.label}>Berat Beras per Jiwa</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={shared.inputWrap}>
+                      <input
+                        type="number" min="0" step="0.1"
+                        value={fitrahKg ? Math.round(fitrahKg * 100) / 100 : ''}
+                        onChange={e => handleFitrahKgChange(Number(e.target.value) || 0)}
+                        style={{ ...shared.input, fontSize: isMobile ? font.lg : font.md }}
+                      />
+                      <span style={shared.suffix}>Kg</span>
+                    </div>
+                    <div style={shared.inputWrap}>
+                      <input
+                        type="number" min="0" step="0.1"
+                        value={fitrahLiter ? Math.round(fitrahLiter * 100) / 100 : ''}
+                        onChange={e => handleFitrahLiterChange(Number(e.target.value) || 0)}
+                        style={{ ...shared.input, fontSize: isMobile ? font.lg : font.md }}
+                      />
+                      <span style={shared.suffix}>Liter</span>
+                    </div>
+                  </div>
+                  <p style={shared.fieldHint}>Ubah salah satu, satunya otomatis menyesuaikan (rasio kepadatan beras BAZNAS: 2,5 kg = 3,5 liter).</p>
+                </div>
+
+                {/* Harga beras per satuan — bisa dikustomisasi, kg & liter saling sinkron */}
+                <div style={shared.field}>
+                  <label style={shared.label}>Harga Beras per Satuan</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={shared.inputWrap}>
+                      <span style={shared.prefix}>Rp</span>
+                      <input
+                        type="number" min="0" step="100"
+                        value={hargaPerKg || ''}
+                        onChange={e => handleHargaKgChange(Number(e.target.value) || 0)}
+                        style={{ ...shared.input, paddingLeft: '38px', paddingRight: '36px', fontSize: isMobile ? font.lg : font.md }}
+                      />
+                      <span style={shared.suffix}>/Kg</span>
+                    </div>
+                    <div style={shared.inputWrap}>
+                      <span style={shared.prefix}>Rp</span>
+                      <input
+                        type="number" min="0" step="100"
+                        value={hargaPerLiter ? Math.round(hargaPerLiter) : ''}
+                        onChange={e => handleHargaLiterChange(Number(e.target.value) || 0)}
+                        style={{ ...shared.input, paddingLeft: '38px', paddingRight: '42px', fontSize: isMobile ? font.lg : font.md }}
+                      />
+                      <span style={shared.suffix}>/Liter</span>
+                    </div>
+                  </div>
+                  <p style={shared.fieldHint}>Ubah salah satu, satunya otomatis menyesuaikan pakai rasio yang sama.</p>
+                </div>
+
+                {/* Preview hasil hitungan */}
                 <div style={s.konversiBox}>
-                  <p style={s.konversiTitle}>📐 Standar BAZNAS yang berlaku</p>
+                  <p style={s.konversiTitle}>📐 Ringkasan yang berlaku saat ini</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
                     <div>
-                      <p style={s.konversiLabel}>Per jiwa</p>
-                      <p style={s.konversiValue}>{satuanFitrah} {satuanLabel}</p>
+                      <p style={s.konversiLabel}>Per jiwa (satuan lembaga)</p>
+                      <p style={s.konversiValue}>{Math.round(satuanFitrah * 100) / 100} {satuanLabel}</p>
                     </div>
                     <div>
                       <p style={s.konversiLabel}>Konversi</p>
                       <p style={s.konversiValue}>
                         {lembagaForm.satuan_beras === 'kg'
-                          ? `= ${FITRAH_LITER} Liter`
-                          : `= ${FITRAH_KG} Kg`}
+                          ? `= ${Math.round(fitrahLiter * 100) / 100} Liter`
+                          : `= ${Math.round(fitrahKg * 100) / 100} Kg`}
                       </p>
                     </div>
                     <div>
                       <p style={s.konversiLabel}>Rate beras → uang</p>
                       <p style={s.konversiValue}>
-                        1 {satuanLabel} = Rp {lembagaForm.satuan_beras === 'kg'
-                          ? '18.000'
-                          : Math.round(45000 / FITRAH_LITER).toLocaleString('id-ID')}
+                        1 {satuanLabel} = {formatRupiah(lembagaForm.satuan_beras === 'kg' ? hargaPerKg : hargaPerLiter)}
                       </p>
                     </div>
                     <div>
                       <p style={s.konversiLabel}>Standar uang / jiwa</p>
-                      <p style={s.konversiValue}>Rp 45.000</p>
+                      <p style={s.konversiValue}>{formatRupiah(standarUangPerJiwa)}</p>
                     </div>
                   </div>
                 </div>
