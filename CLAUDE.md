@@ -77,18 +77,22 @@ transaksi        — id, lembaga_id, muzakki_id, jenis, jumlah_uang, jumlah_bera
 ### Struktur Folder (App Router)
 ```
 app/
-  dashboard/
-  login/
-  muzakki/
-  mustahik/
-  profil/
-  transaksi/
-    tambah/
-      fidyah/ infaq/ zakat-fitrah/ zakat-mal/
+  [lembaga]/          ← dynamic segment slug lembaga -- SEMUA halaman amil ada
+                        di bawah sini sekarang (myzakat.id/nama-lembaga/dashboard dst)
+    dashboard/
+    muzakki/
+    mustahik/
+    profil/
+    transaksi/
+      tambah/
+        fidyah/ infaq/ zakat-fitrah/ zakat-mal/
+    distribusi/
+      _lib.ts         ← tipe & helper lokal khusus fitur distribusi (bukan shared/ global)
+      [id]/           ← detail sesi: status penerimaan per orang + tanda terima
+  login/              ← TIDAK di bawah [lembaga] -- belum tau slug amil sebelum login
+  register/           ← sama, alur kode registrasi
   konfirmasi/[id]/    ← halaman PUBLIK (tanpa Sidebar), dibuka muzakki setelah scan QR
-  distribusi/
-    _lib.ts           ← tipe & helper lokal khusus fitur distribusi (bukan shared/ global)
-    [id]/             ← detail sesi: status penerimaan per orang + tanda terima
+  panel-zakat/        ← super admin, TIDAK terikat lembaga manapun, tetap top-level
   api/
     harga-emas/       ← proxy route untuk Gold Price API (bypass CORS)
 components/
@@ -105,7 +109,15 @@ utils/
     client.ts         ← Supabase client-side
     server.ts         ← Supabase server-side (SSR)
 ```
-> Catatan: tidak ada route group `(dashboard)` atau `lib/supabaseClient.ts` — struktur di atas yang aktual per 2026-09-18 (folder `hooks/` baru ditambahkan tanggal ini, lihat di bawah).
+> Catatan: tidak ada route group `(dashboard)` atau `lib/supabaseClient.ts` — struktur di atas yang aktual per 2026-09-26 (URL tenant-scoped `[lembaga]` baru ditambahkan tanggal ini, lihat "URL Tenant-Scoped" di bawah).
+
+### URL Tenant-Scoped (`/[lembaga]/...`)
+- `lembaga.slug` (kolom baru, migration `0009`) itu murni buat navigasi/kosmetik URL — **BUKAN** sumber otorisasi. Akses data tetap di-scope lewat `lembaga_id` yang di-resolve dari `profil_amil` di server (RLS), persis seperti sebelumnya.
+- `middleware.ts` yang jaga konsistensinya: tiap request ke halaman tenant (`dashboard`, `transaksi`, `muzakki`, `mustahik`, `profil`, `distribusi`), middleware query `profil_amil` → `lembaga.slug` amil yang login, terus dibandingkan ke slug di URL. Kalau beda (amil coba akses/ketik slug lembaga lain), langsung di-redirect balik ke slug yang benar — path & query string-nya dipertahankan, cuma slug-nya yang dikoreksi.
+- Slug lembaga baru **digenerate otomatis** dari nama saat super admin bikin lembaga (`slugify()` di `/api/panel-zakat/lembaga` + loop unique di RPC `admin_create_lembaga_with_kode` — nambah suffix `-2`, `-3`, dst kalau nama sama).
+- Karena semua halaman amil sekarang butuh tau slug-nya, tiap halaman/komponen di bawah `[lembaga]/` ambil slug lewat `useParams<{ lembaga: string }>()` (bukan context/prop-drilling) — dipakai buat prefix tiap `router.push`/`Link href` internal ke halaman tenant lain.
+- `login` dan `register` **sengaja tetap di luar** `[lembaga]/` — sebelum berhasil autentikasi, sistem belum tau amil ini punya slug apa. Setelah login/signup sukses, baru resolve `profil_amil → lembaga.slug` dan redirect ke `/${slug}/dashboard`. Super admin (`SUPER_ADMIN_EMAIL`) dikecualikan dari lookup ini, langsung diarahkan ke `/panel-zakat`.
+- `panel-zakat` juga tetap top-level (super admin tidak terikat lembaga manapun, lihat dokumentasi lama soal ini).
 
 ### Deteksi Mobile
 - **Sudah ada satu hook bersama:** `src/hooks/useIsMobile.ts`, dipakai lewat `import { useIsMobile } from '@/hooks/useIsMobile'` di semua halaman yang butuh deteksi mobile (dashboard, login, muzakki, mustahik, transaksi, transaksi/tambah + subhalamannya, distribusi + subhalamannya, profil, panel-zakat, Sidebar).
@@ -172,6 +184,52 @@ Semua halaman & komponen sudah selesai direfactor (2026-08-26) untuk pakai siste
 - Mobile: card-list view menggantikan data table
 - Layout: `marginLeft`, `padding`, `flexDirection` diubah conditional
 - Breakpoint: `window.innerWidth <= 768`
+
+---
+
+## 🔑 Alur Lupa Password
+
+File terkait: `app/lupa-password/` (minta link), `app/reset-password/` (set password baru), `app/auth/confirm/route.ts` (verifikasi token dari email).
+
+### Kondisi saat ini (sementara, sengaja)
+
+Memakai **template email BAWAAN Supabase** + alur **PKCE**. Ini dipilih karena Supabase mengunci pengeditan template email selama project belum memakai custom SMTP, dan pemasangan SMTP ditunda sampai setelah rilis.
+
+Dua keterbatasan yang **diketahui dan diterima**:
+1. **Link reset harus dibuka di browser yang sama** dengan yang meminta reset — PKCE menyimpan `code_verifier` di browser tersebut. Buka di HP padahal minta di laptop = gagal. Batasan ini sudah ditulis eksplisit di UI (`/lupa-password` dan `/reset-password`) supaya amil tidak bingung.
+2. **SMTP bawaan Supabase limitnya ~2-4 email/jam untuk SELURUH project.** Cukup untuk volume kecil saat rilis, tapi akan mencekik begitu ramai.
+
+### Jalur upgrade (sudah disiapkan, tinggal aktifkan)
+
+`app/auth/confirm/route.ts` **sudah ada dan berfungsi** — memakai pola `token_hash` + `verifyOtp` di server yang aman lintas perangkat. Route ini belum aktif karena template email belum diarahkan ke sana. Untuk mengaktifkan, **tidak perlu ubah kode sama sekali**:
+
+1. Pasang custom SMTP (Resend/Brevo) di **Authentication → Emails → SMTP Settings**.
+2. Template terbuka → **Reset password** diisi link ke `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=recovery`.
+3. Ubah `redirectTo` di `app/lupa-password/page.tsx` dari `/reset-password` jadi `/auth/confirm?next=/reset-password`.
+4. Naikkan batas di **Authentication → Rate Limits**.
+
+Semua setting di atas **per project** — staging & production terpisah.
+
+`Authentication → URL Configuration`: Site URL = domain produksi, dan semua origin (localhost, preview Vercel, produksi) wajib terdaftar di Redirect URLs.
+
+---
+
+## 💳 Status Pembayaran Transaksi (WAJIB DIPATUHI)
+
+`transaksi.status` menentukan apakah sebuah transaksi dihitung sebagai **dana nyata** atau belum:
+
+- `'terkonfirmasi'` → dana sudah diterima, **ikut dihitung**.
+- `'pending'` → dana **belum** diterima, **TIDAK boleh ikut dihitung** di manapun.
+
+**Aturan mutlak:** setiap query yang menjumlahkan uang/beras dari tabel `transaksi` **WAJIB** memfilter `.eq('status', 'terkonfirmasi')`. Berlaku untuk Dashboard, saldo Distribusi, laporan, export — apa pun yang menghasilkan angka rupiah/kg. Kalau lupa, dana yang belum dibayar akan terhitung sebagai uang masuk dan (lebih bahaya lagi) bisa ikut didistribusikan ke mustahik.
+
+Siapa yang `pending` saat dicatat:
+- **QRIS** → `'pending'`. QRIS di app ini statis (gambar upload, bukan QRIS dinamis dari payment gateway), jadi sistem **tidak bisa** tahu pembayaran sudah masuk atau belum. Konfirmasi selalu manual oleh amil lewat tombol di halaman Transaksi setelah cek mutasi.
+- **Tunai, Transfer Bank, Beras** → langsung `'terkonfirmasi'` (keputusan user, 2026-09-27).
+
+Default kolom di DB sudah diset `'terkonfirmasi'`, tapi tiap `insert` transaksi tetap mengirim `status` eksplisit supaya niatnya terbaca jelas di kode.
+
+> Catatan: halaman `/konfirmasi/[id]` (alur lama muzakki scan QR untuk konfirmasi sendiri) sudah **tidak di-link dari manapun** sejak QRIS diganti gambar statis. Halamannya masih ada dan bisa diakses via URL langsung.
 
 ---
 
@@ -266,4 +324,4 @@ useEffect(() => { fetchData(); }, []);
 
 ---
 
-*Last updated: 2026-09-18 — `useIsMobile` dikonsolidasi jadi satu hook bersama di `src/hooks/useIsMobile.ts` (sebelumnya duplikat manual di 13+ file); lihat "Deteksi Mobile" di atas.*
+*Last updated: 2026-09-27 — QRIS diganti gambar statis yang di-upload amil (Supabase Storage bucket `qris`), dan `transaksi.status` sekarang menentukan apakah dana dihitung; lihat "Status Pembayaran Transaksi" di atas. Sebelumnya (2026-09-26): URL tenant-scoped `/[lembaga]/...`.*

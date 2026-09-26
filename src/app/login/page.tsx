@@ -1,8 +1,10 @@
 'use client'
 
 import React, { Suspense, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { SUPER_ADMIN_EMAIL } from '@/utils/supabase/superAdmin'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { colors, font, gradient, radius } from '@/styles/tokens'
 
@@ -22,14 +24,44 @@ function LoginForm() {
     }
     setLoading(true)
     setError('')
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (authError) {
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    if (authError || !data.user) {
+      setLoading(false)
       setError('Email atau kata sandi salah. Silakan coba lagi.')
-    } else {
-      const redirect = searchParams.get('redirect') ?? '/dashboard'
-      router.push(redirect)
+      return
     }
+
+    // Kalau middleware yang ngelempar ke sini (misal buka URL protected pas
+    // belum login), redirect param-nya sudah nunjuk ke path yang benar --
+    // middleware sendiri yang bakal koreksi slug-nya lagi kalau ternyata salah.
+    const redirect = searchParams.get('redirect')
+    if (redirect) {
+      setLoading(false)
+      router.push(redirect)
+      return
+    }
+
+    if (data.user.email === SUPER_ADMIN_EMAIL) {
+      setLoading(false)
+      router.push('/panel-zakat')
+      return
+    }
+
+    // Buka /login langsung (bukan dilempar middleware) -- cari slug lembaga
+    // amil ini sendiri buat tau ke mana dashboard-nya.
+    const { data: profil } = await supabase
+      .from('profil_amil')
+      .select('lembaga:lembaga_id ( slug )')
+      .eq('id', data.user.id)
+      .single()
+    const slug = (profil?.lembaga as unknown as { slug: string } | null)?.slug
+
+    setLoading(false)
+    if (!slug) {
+      setError('Akun ini belum terhubung ke lembaga manapun. Hubungi admin.')
+      return
+    }
+    router.push(`/${slug}/dashboard`)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -117,12 +149,16 @@ function LoginForm() {
         </button>
       </div>
 
-      <p style={styles.footerNote}>Lupa akses? Hubungi administrator sistem Anda.</p>
+      <p style={styles.footerNote}>
+        <Link href="/lupa-password" style={{ color: colors.primary, fontWeight: 600, textDecoration: 'none' }}>
+          Lupa kata sandi?
+        </Link>
+      </p>
       <p style={styles.footerNote}>
         Punya kode registrasi lembaga?{' '}
-        <a href="/register" style={{ color: colors.primary, fontWeight: 600, textDecoration: 'none' }}>
+        <Link href="/register" style={{ color: colors.primary, fontWeight: 600, textDecoration: 'none' }}>
           Daftar di sini
-        </a>
+        </Link>
       </p>
     </div>
   )

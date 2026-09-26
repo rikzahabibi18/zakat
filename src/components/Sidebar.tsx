@@ -2,14 +2,16 @@
 
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { useParams, usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { colors, font, gradient, radius, shadow, spacing } from '@/styles/tokens'
 
+// href di sini relatif (tanpa slash depan) -- di-prefix slug lembaga saat
+// render, karena semua halaman ini sekarang tenant-scoped di /[lembaga]/...
 const navItems = [
   {
-    href: '/dashboard',
+    href: 'dashboard',
     label: 'Dashboard',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -21,7 +23,7 @@ const navItems = [
     ),
   },
   {
-    href: '/transaksi',
+    href: 'transaksi',
     label: 'Transaksi',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -30,7 +32,7 @@ const navItems = [
     ),
   },
   {
-    href: '/transaksi/tambah',
+    href: 'transaksi/tambah',
     label: 'Catat Zakat',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -41,7 +43,7 @@ const navItems = [
     highlight: true,
   },
   {
-    href: '/muzakki',
+    href: 'muzakki',
     label: 'Muzakki',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -51,7 +53,7 @@ const navItems = [
     ),
   },
   {
-    href: '/mustahik',
+    href: 'mustahik',
     label: 'Mustahik',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -62,7 +64,7 @@ const navItems = [
     ),
   },
   {
-    href: '/distribusi',
+    href: 'distribusi',
     label: 'Distribusi',
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -76,6 +78,8 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const params = useParams()
+  const lembaga = typeof params.lembaga === 'string' ? params.lembaga : ''
 
   const isMobile = useIsMobile()
   const [isOpen, setIsOpen] = useState(false)
@@ -123,11 +127,12 @@ export default function Sidebar() {
       <nav style={s.nav}>
         <p style={s.navLabel}>MENU</p>
         {navItems.map((item) => {
-          const isActive = pathname === item.href
+          const href = `/${lembaga}/${item.href}`
+          const isActive = pathname === href
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               style={{
                 ...s.navItem,
                 ...(item.highlight ? s.navHighlight : {}),
@@ -149,10 +154,10 @@ export default function Sidebar() {
       {/* Profil & Keluar */}
       <div style={s.bottomSection}>
         <Link
-          href="/profil"
+          href={`/${lembaga}/profil`}
           style={{
             ...s.bottomBtn,
-            ...(pathname === '/profil' ? s.bottomBtnActive : {}),
+            ...(pathname === `/${lembaga}/profil` ? s.bottomBtnActive : {}),
           }}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

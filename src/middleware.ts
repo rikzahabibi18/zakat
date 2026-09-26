@@ -2,8 +2,16 @@ import { createServerClient, type CookieMethodsServer } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { SUPER_ADMIN_EMAIL } from '@/utils/supabase/superAdmin'
 
-const PROTECTED_ROUTES = ['/dashboard', '/transaksi', '/muzakki', '/profil', '/mustahik', '/distribusi', '/panel-zakat']
-const PUBLIC_ROUTES = ['/login', '/konfirmasi', '/register']
+const PUBLIC_ROUTES = [
+  '/login', '/konfirmasi', '/register',
+  // Alur lupa password -- semuanya diakses justru saat user BELUM bisa login.
+  // /auth/confirm yang memverifikasi token dari email dan bikin sesi recovery.
+  '/lupa-password', '/reset-password', '/auth',
+]
+// Nama-nama halaman tenant-scoped di bawah /[lembaga]/... -- dipakai buat
+// nebak apakah segmen kedua URL itu memang halaman amil (bukan cuma slug
+// nyasar tanpa halaman valid, yang biar 404 alami lewat Next.js router).
+const TENANT_PAGES = ['dashboard', 'transaksi', 'muzakki', 'mustahik', 'profil', 'distribusi']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -11,11 +19,13 @@ export async function middleware(request: NextRequest) {
   const isPublic = PUBLIC_ROUTES.some(r => pathname.startsWith(r))
   const isApi = pathname.startsWith('/api')
   const isStatic = pathname.startsWith('/_next') || pathname.includes('.')
-
   if (isPublic || isApi || isStatic) return NextResponse.next()
 
-  const isProtected = PROTECTED_ROUTES.some(r => pathname.startsWith(r))
-  if (!isProtected) return NextResponse.next()
+  const isPanelZakat = pathname.startsWith('/panel-zakat')
+  const segments = pathname.split('/').filter(Boolean)
+  const isTenantPage = segments.length >= 2 && TENANT_PAGES.includes(segments[1])
+
+  if (!isPanelZakat && !isTenantPage) return NextResponse.next()
 
   let response = NextResponse.next({
     request: { headers: request.headers },
@@ -48,8 +58,35 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  if (pathname.startsWith('/panel-zakat') && user.email !== SUPER_ADMIN_EMAIL) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  if (isPanelZakat) {
+    if (user.email !== SUPER_ADMIN_EMAIL) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    return response
+  }
+
+  // Tenant page: slug di URL cuma navigasi/kosmetik -- yang menentukan data
+  // yang boleh diakses tetap lembaga_id dari profil_amil (via RLS di server),
+  // BUKAN slug ini. Ini cuma jaga supaya amil gak nyasar/nyoba buka slug
+  // lembaga lain lewat URL manual -- selalu di-redirect balik ke slug asli.
+  const urlSlug = segments[0]
+  const { data: profil } = await supabase
+    .from('profil_amil')
+    .select('lembaga:lembaga_id ( slug )')
+    .eq('id', user.id)
+    .single()
+
+  const realSlug = (profil?.lembaga as unknown as { slug: string } | null)?.slug
+
+  if (!realSlug) {
+    // Akun amil tanpa lembaga (gak seharusnya terjadi via alur normal) --
+    // jangan biarkan nyangkut di halaman yang gak bisa resolve datanya.
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  if (urlSlug !== realSlug) {
+    const correctPath = '/' + [realSlug, ...segments.slice(1)].join('/')
+    return NextResponse.redirect(new URL(correctPath + request.nextUrl.search, request.url))
   }
 
   return response
