@@ -28,8 +28,9 @@ export default function MuzakkiPage() {
   const [loading, setLoading] = useState(true)
   const isMobile = useIsMobile()
 
-  // Modal state
+  // Modal state (dipakai buat Tambah maupun Edit -- editingId null = mode tambah)
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState({ nama: '', nomor_hp: '', alamat: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -61,6 +62,20 @@ export default function MuzakkiPage() {
     setSaving(true)
     setError('')
 
+    if (editingId) {
+      const { error: err } = await supabase.from('muzakki').update({
+        nama: form.nama.trim(),
+        nomor_hp: form.nomor_hp.trim() || null,
+        alamat: form.alamat.trim() || null,
+      }).eq('id', editingId)
+
+      setSaving(false)
+      if (err) { setError('Gagal menyimpan. Coba lagi.'); return }
+      handleCloseModal()
+      fetchData()
+      return
+    }
+
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profil } = await supabase
       .from('profil_amil')
@@ -77,13 +92,20 @@ export default function MuzakkiPage() {
 
     setSaving(false)
     if (err) { setError('Gagal menyimpan. Coba lagi.'); return }
-    setShowModal(false)
-    setForm({ nama: '', nomor_hp: '', alamat: '' })
+    handleCloseModal()
     fetchData()
+  }
+
+  const handleOpenEdit = (m: Muzakki) => {
+    setEditingId(m.id)
+    setForm({ nama: m.nama, nomor_hp: m.nomor_hp ?? '', alamat: m.alamat ?? '' })
+    setError('')
+    setShowModal(true)
   }
 
   const handleCloseModal = () => {
     setShowModal(false)
+    setEditingId(null)
     setForm({ nama: '', nomor_hp: '', alamat: '' })
     setError('')
   }
@@ -173,7 +195,10 @@ export default function MuzakkiPage() {
               <div key={m.id} style={s.mobileCard}>
                 <div style={s.mobileCardHeader}>
                   <span style={s.namaText}>{m.nama}</span>
-                  <span style={s.mobileTimeText}>{formatTanggal(m.created_at)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={s.mobileTimeText}>{formatTanggal(m.created_at)}</span>
+                    <button onClick={() => handleOpenEdit(m)} style={s.editBtn}>✎ Edit</button>
+                  </div>
                 </div>
                 <div style={s.mobileCardBody}>
                   <div>
@@ -209,7 +234,7 @@ export default function MuzakkiPage() {
               <table style={shared.table}>
                 <thead>
                   <tr>
-                    {['No', 'Nama', 'Nomor HP', 'Alamat', 'Terdaftar'].map(h => (
+                    {['No', 'Nama', 'Nomor HP', 'Alamat', 'Terdaftar', 'Aksi'].map(h => (
                       <th key={h} style={shared.th}>{h}</th>
                     ))}
                   </tr>
@@ -231,6 +256,9 @@ export default function MuzakkiPage() {
                       </td>
                       <td style={{ ...shared.td, color: colors.textDisabled }}>
                         {formatTanggal(m.created_at)}
+                      </td>
+                      <td style={shared.td}>
+                        <button onClick={() => handleOpenEdit(m)} style={s.editBtn}>✎ Edit</button>
                       </td>
                     </tr>
                   ))}
@@ -257,7 +285,7 @@ export default function MuzakkiPage() {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ ...shared.cardHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: `1px solid ${colors.border}` }}>
-              <h2 style={{ ...shared.cardTitle, fontSize: font.lg, margin: 0 }}>Tambah Muzakki</h2>
+              <h2 style={{ ...shared.cardTitle, fontSize: font.lg, margin: 0 }}>{editingId ? 'Edit Muzakki' : 'Tambah Muzakki'}</h2>
               <button onClick={handleCloseModal} style={shared.clearBtn}>✕</button>
             </div>
 
@@ -328,7 +356,7 @@ export default function MuzakkiPage() {
                   opacity: saving ? 0.6 : 1,
                 }}
               >
-                {saving ? 'Menyimpan...' : 'Simpan'}
+                {saving ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Simpan'}
               </button>
             </div>
           </div>
@@ -343,6 +371,11 @@ const s: Record<string, React.CSSProperties> = {
   namaText: { fontWeight: 600, color: colors.text },
   hpLink: { color: colors.primary, textDecoration: 'none', fontWeight: 500 },
   required: { color: colors.danger },
+  editBtn: {
+    padding: '5px 10px', fontSize: font.xs, fontWeight: 700, color: colors.primary,
+    background: colors.primaryLight, border: `1px solid ${colors.primary}`, borderRadius: '6px',
+    cursor: 'pointer', fontFamily: font.family, whiteSpace: 'nowrap',
+  },
   
   /* Mobile card list */
   mobileListContainer: { display: 'flex', flexDirection: 'column', gap: '10px' },

@@ -96,7 +96,7 @@ function FidyahForm() {
       // QRIS belum tentu dibayar saat dicatat -- ditandai pending supaya tidak
       // ikut terhitung sebagai dana masuk sampai amil konfirmasi di halaman
       // Transaksi. Metode lain dianggap lunas saat itu juga.
-      status: metode === 'QRIS' ? 'pending' : 'terkonfirmasi',
+      status: (metode === 'QRIS' || metode === 'Transfer Bank') ? 'pending' : 'terkonfirmasi',
     }).select('id, nomor_urut')
 
     setSaving(false)
