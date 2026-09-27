@@ -121,6 +121,7 @@ export default function MustahikPage() {
   const [search, setSearch] = useState('')
   const [filterGolongan, setFilterGolongan] = useState('Semua')
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState({ nama: '', golongan: 'Fakir', nomor_hp: '', alamat: '', keterangan: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -170,6 +171,22 @@ export default function MustahikPage() {
     setSaving(true)
     setError('')
 
+    if (editingId) {
+      const { error: err } = await supabase.from('mustahik').update({
+        nama: form.nama.trim(),
+        golongan: form.golongan,
+        nomor_hp: form.nomor_hp.trim() || null,
+        alamat: form.alamat.trim() || null,
+        keterangan: form.keterangan.trim() || null,
+      }).eq('id', editingId)
+
+      setSaving(false)
+      if (err) { setError('Gagal menyimpan. Coba lagi.'); return }
+      handleCloseModal()
+      fetchData()
+      return
+    }
+
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profil } = await supabase
       .from('profil_amil').select('lembaga_id').eq('id', user!.id).single()
@@ -185,13 +202,23 @@ export default function MustahikPage() {
 
     setSaving(false)
     if (err) { setError('Gagal menyimpan. Coba lagi.'); return }
-    setShowModal(false)
-    setForm({ nama: '', golongan: 'Fakir', nomor_hp: '', alamat: '', keterangan: '' })
+    handleCloseModal()
     fetchData()
+  }
+
+  function handleOpenEdit(m: Mustahik) {
+    setEditingId(m.id)
+    setForm({
+      nama: m.nama, golongan: m.golongan,
+      nomor_hp: m.nomor_hp ?? '', alamat: m.alamat ?? '', keterangan: m.keterangan ?? '',
+    })
+    setError('')
+    setShowModal(true)
   }
 
   function handleCloseModal() {
     setShowModal(false)
+    setEditingId(null)
     setForm({ nama: '', golongan: 'Fakir', nomor_hp: '', alamat: '', keterangan: '' })
     setError('')
   }
@@ -400,9 +427,12 @@ export default function MustahikPage() {
                 <div key={m.id} style={{ ...s.mobileCard, cursor: 'pointer' }} onClick={() => handleOpenDetail(m)}>
                   <div style={s.mobileCardHeader}>
                     <span style={s.namaText}>{m.nama}</span>
-                    <span style={{ ...s.golonganBadge, background: color.bg, color: color.color }}>
-                      {m.golongan}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ ...s.golonganBadge, background: color.bg, color: color.color }}>
+                        {m.golongan}
+                      </span>
+                      <button onClick={e => { e.stopPropagation(); handleOpenEdit(m) }} style={s.editBtn}>✎</button>
+                    </div>
                   </div>
                   <div style={s.mobileCardBody}>
                     <div>
@@ -442,7 +472,7 @@ export default function MustahikPage() {
               <table style={{ ...shared.table, minWidth: '760px' }}>
                 <thead>
                   <tr>
-                    {['No', 'Nama', 'Golongan', 'Nomor HP', 'Alamat', 'Keterangan', 'Terdaftar'].map(h => (
+                    {['No', 'Nama', 'Golongan', 'Nomor HP', 'Alamat', 'Keterangan', 'Terdaftar', 'Aksi'].map(h => (
                       <th key={h} style={shared.th}>{h}</th>
                     ))}
                   </tr>
@@ -473,6 +503,9 @@ export default function MustahikPage() {
                           {m.keterangan ?? <span style={s.emptyCell}>—</span>}
                         </td>
                         <td style={{ ...shared.td, color: colors.textDisabled }}>{formatTanggal(m.created_at)}</td>
+                        <td style={shared.td}>
+                          <button onClick={e => { e.stopPropagation(); handleOpenEdit(m) }} style={s.editBtn}>✎ Edit</button>
+                        </td>
                       </tr>
                     )
                   })}
@@ -496,7 +529,7 @@ export default function MustahikPage() {
             overflow: 'hidden',
           }} onClick={e => e.stopPropagation()}>
             <div style={{ ...shared.cardHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: `1px solid ${colors.border}` }}>
-              <h2 style={{ ...shared.cardTitle, fontSize: font.lg, margin: 0 }}>Tambah Mustahik</h2>
+              <h2 style={{ ...shared.cardTitle, fontSize: font.lg, margin: 0 }}>{editingId ? 'Edit Mustahik' : 'Tambah Mustahik'}</h2>
               <button onClick={handleCloseModal} style={s.closeBtn}>✕</button>
             </div>
             <div style={{ ...shared.modalBody, maxHeight: '60vh' }}>
@@ -552,7 +585,7 @@ export default function MustahikPage() {
                 ...shared.btnPrimary,
                 width: isMobile ? '100%' : 'auto',
               }}>
-                {saving ? 'Menyimpan...' : 'Simpan'}
+                {saving ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Simpan'}
               </button>
             </div>
           </div>
@@ -673,6 +706,11 @@ const s: Record<string, React.CSSProperties> = {
   golonganBadge: { display: 'inline-block', padding: '3px 10px', borderRadius: radius.full, fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' },
   hpLink: { color: colors.primary, textDecoration: 'none', fontWeight: 500 },
   emptyCell: { color: '#D4CEC7' },
+  editBtn: {
+    padding: '5px 10px', fontSize: font.xs, fontWeight: 700, color: colors.primary,
+    background: colors.primaryLight, border: `1px solid ${colors.primary}`, borderRadius: '6px',
+    cursor: 'pointer', fontFamily: font.family, whiteSpace: 'nowrap',
+  },
 
   /* Mobile card list */
   mobileListContainer: { display: 'flex', flexDirection: 'column', gap: '10px' },

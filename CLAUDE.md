@@ -224,8 +224,8 @@ Semua setting di atas **per project** — staging & production terpisah.
 **Aturan mutlak:** setiap query yang menjumlahkan uang/beras dari tabel `transaksi` **WAJIB** memfilter `.eq('status', 'terkonfirmasi')`. Berlaku untuk Dashboard, saldo Distribusi, laporan, export — apa pun yang menghasilkan angka rupiah/kg. Kalau lupa, dana yang belum dibayar akan terhitung sebagai uang masuk dan (lebih bahaya lagi) bisa ikut didistribusikan ke mustahik.
 
 Siapa yang `pending` saat dicatat:
-- **QRIS** → `'pending'`. QRIS di app ini statis (gambar upload, bukan QRIS dinamis dari payment gateway), jadi sistem **tidak bisa** tahu pembayaran sudah masuk atau belum. Konfirmasi selalu manual oleh amil lewat tombol di halaman Transaksi setelah cek mutasi.
-- **Tunai, Transfer Bank, Beras** → langsung `'terkonfirmasi'` (keputusan user, 2026-09-27).
+- **QRIS & Transfer Bank** → `'pending'`. Dua-duanya sama-sama tidak bisa diverifikasi otomatis oleh sistem: QRIS statis (gambar upload, bukan QRIS dinamis dari payment gateway) dan transfer bank sama-sama baru sebatas "amil kasih info tujuan pembayaran", bukan bukti dana benar-benar sudah masuk. Konfirmasi selalu manual oleh amil lewat tombol di halaman Transaksi setelah cek mutasi/rekening. `RekeningModal` (Transfer Bank) dan `QrisModal` (QRIS) sama-sama menampilkan pesan "Status transaksi: Belum dibayar" setelah disimpan.
+- **Tunai, Beras** → langsung `'terkonfirmasi'` (uang/barang fisik diterima saat itu juga, keputusan user 2026-09-27; Transfer Bank diperluas ke pending pada 2026-09-28).
 
 Default kolom di DB sudah diset `'terkonfirmasi'`, tapi tiap `insert` transaksi tetap mengirim `status` eksplisit supaya niatnya terbaca jelas di kode.
 

@@ -67,6 +67,14 @@ export default function RekeningModal({ namaBank, nomorRekening, atasNamaRekenin
             </div>
           )}
 
+          <div style={s.statusBox}>
+            <p style={s.statusTitle}>Status transaksi: Belum dibayar</p>
+            <p style={s.statusDesc}>
+              Transaksi ini <strong>belum dihitung</strong> sebagai dana masuk. Setelah dana benar-benar
+              masuk ke rekening, konfirmasi lewat halaman <strong>Transaksi</strong>.
+            </p>
+          </div>
+
           <button onClick={onLanjut} style={{ ...shared.btnPrimary, width: '100%' }}>
             Lanjut →
           </button>
@@ -89,4 +97,10 @@ const s: Record<string, React.CSSProperties> = {
     background: colors.primaryLight, border: `1px solid ${colors.primary}`, borderRadius: radius.sm,
     cursor: 'pointer', fontFamily: font.family, flexShrink: 0,
   },
+  statusBox: {
+    width: '100%', boxSizing: 'border-box', background: colors.surfaceAlt,
+    borderRadius: radius.md, padding: '12px 14px',
+  },
+  statusTitle: { fontSize: font.base, fontWeight: 700, color: colors.textMuted, marginBottom: '4px' },
+  statusDesc: { fontSize: font.sm, color: colors.textSubtle, lineHeight: 1.5 },
 }
