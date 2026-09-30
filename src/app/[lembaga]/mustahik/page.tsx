@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import * as XLSX from 'xlsx'
+import { unduhExcel, bacaExcel } from '@/utils/excel'
 import { createClient } from '@/utils/supabase/client'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
@@ -24,6 +24,26 @@ interface AnggotaKeluarga {
   nama: string
   hubungan: string
   created_at: string
+}
+
+// ── Import Excel ──────────────────────────────────────────
+// Satu baris Excel = satu ORANG. Barisnya dikelompokkan pakai konvensi yang
+// sama dengan hasil export: baris dengan kolom "Nama Kepala Keluarga" terisi
+// membuka keluarga baru, baris di bawahnya yang kolom itu KOSONG dianggap
+// anggota keluarga dari kepala keluarga terakhir.
+interface ImportAnggota {
+  nama: string
+  hubungan: string
+}
+
+interface ImportGroup {
+  baris: number // nomor baris di file Excel, dipakai buat pesan error
+  nama: string
+  golongan: string
+  nomor_hp: string
+  alamat: string
+  keterangan: string
+  anggota: ImportAnggota[]
 }
 
 const HUBUNGAN_LIST = ['Istri', 'Suami', 'Anak', 'Orang Tua', 'Saudara', 'Lainnya']
@@ -105,12 +125,120 @@ async function exportToExcel(data: Mustahik[], supabase: ReturnType<typeof creat
     }
   }
 
-  const ws = XLSX.utils.json_to_sheet(rows)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Mustahik')
-  ws['!cols'] = [{ wch: 5 }, { wch: 25 }, { wch: 15 }, { wch: 18 }, { wch: 30 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 25 }, { wch: 16 }]
   const tanggal = new Date().toLocaleDateString('id-ID').replace(/\//g, '-')
-  XLSX.writeFile(wb, `mustahik-${tanggal}.xlsx`)
+  await unduhExcel(`mustahik-${tanggal}.xlsx`, [{
+    nama: 'Mustahik',
+    kolom: [
+      { header: 'No', width: 5 },
+      { header: 'Nama Kepala Keluarga', width: 25 },
+      { header: 'Golongan', width: 15 },
+      { header: 'Alamat', width: 30 },
+      { header: 'Keterangan', width: 30 },
+      { header: 'Terdaftar', width: 15 },
+      { header: 'Nomor HP', width: 16 },
+      { header: 'Jumlah Jiwa', width: 12 },
+      { header: 'Nama Anggota', width: 25 },
+      { header: 'Hubungan', width: 16 },
+    ],
+    baris: rows,
+  }])
+}
+
+function downloadTemplateImport() {
+  // Nama kolom sengaja dibuat subset dari kolom hasil export, supaya file hasil
+  // "Export Excel" bisa langsung dipakai balik sebagai bahan import tanpa diedit —
+  // kolom turunan di export (No, Terdaftar, Jumlah Jiwa) diabaikan oleh parser.
+  const contoh = [
+    { 'Nama Kepala Keluarga': 'Budi Santoso', 'Golongan': 'Fakir',  'Nomor HP': '081234567890', 'Alamat': 'Jl. Melati No. 5', 'Keterangan': 'Rumah tidak layak huni', 'Nama Anggota': '', 'Hubungan': '' },
+    { 'Nama Kepala Keluarga': '',             'Golongan': '',       'Nomor HP': '',             'Alamat': '',                 'Keterangan': '',                       'Nama Anggota': 'Siti Aminah', 'Hubungan': 'Istri' },
+    { 'Nama Kepala Keluarga': '',             'Golongan': '',       'Nomor HP': '',             'Alamat': '',                 'Keterangan': '',                       'Nama Anggota': 'Ahmad Fauzi',  'Hubungan': 'Anak' },
+    { 'Nama Kepala Keluarga': 'Dewi Lestari', 'Golongan': 'Miskin', 'Nomor HP': '',             'Alamat': 'Jl. Mawar No. 2',  'Keterangan': '',                       'Nama Anggota': '', 'Hubungan': '' },
+  ]
+
+  return unduhExcel('template-import-mustahik.xlsx', [
+    {
+      nama: 'Data Mustahik',
+      kolom: [
+        { header: 'Nama Kepala Keluarga', width: 25 },
+        { header: 'Golongan', width: 14 },
+        { header: 'Nomor HP', width: 16 },
+        { header: 'Alamat', width: 28 },
+        { header: 'Keterangan', width: 26 },
+        { header: 'Nama Anggota', width: 22 },
+        { header: 'Hubungan', width: 14 },
+      ],
+      baris: contoh,
+    },
+    {
+      // Sheet kedua: daftar nilai yang sah, biar amil tidak menebak ejaan.
+      nama: 'Pilihan Nilai',
+      kolom: [
+        { header: 'Kolom', width: 12 },
+        { header: 'Nilai yang sah', width: 18 },
+        { header: 'Keterangan', width: 42 },
+      ],
+      baris: [
+        ...GOLONGAN_LIST.map(g => ({ 'Kolom': 'Golongan', 'Nilai yang sah': g.value, 'Keterangan': g.desc })),
+        ...HUBUNGAN_LIST.map(h => ({ 'Kolom': 'Hubungan', 'Nilai yang sah': h, 'Keterangan': 'Hanya untuk baris anggota keluarga' })),
+      ],
+    },
+  ])
+}
+
+async function parseImportFile(file: File): Promise<{ groups: ImportGroup[]; errors: string[] }> {
+  const rows = await bacaExcel(file)
+  if (rows.length === 0) return { groups: [], errors: ['File tidak punya baris data yang bisa dibaca.'] }
+
+  const teks = (v: unknown) => String(v ?? '').trim()
+
+  const groups: ImportGroup[] = []
+  const errors: string[] = []
+
+  rows.forEach((raw, i) => {
+    const baris = i + 2 // +1 karena baris 1 adalah header, +1 karena index mulai dari 0
+    const namaKK = teks(raw['Nama Kepala Keluarga'])
+    const namaAnggota = teks(raw['Nama Anggota'])
+
+    if (!namaKK && !namaAnggota) return // baris kosong — lewati tanpa protes
+
+    if (namaKK) {
+      const golongan = teks(raw['Golongan'])
+      if (!GOLONGAN_LIST.some(g => g.value.toLowerCase() === golongan.toLowerCase())) {
+        errors.push(`Baris ${baris}: golongan "${golongan || '(kosong)'}" tidak dikenal — lihat sheet "Pilihan Nilai" di template.`)
+        return
+      }
+      groups.push({
+        baris,
+        nama: namaKK,
+        // dinormalkan ke ejaan resmi supaya filter golongan di halaman ini tetap cocok
+        golongan: GOLONGAN_LIST.find(g => g.value.toLowerCase() === golongan.toLowerCase())!.value,
+        nomor_hp: teks(raw['Nomor HP']).replace(/\D/g, '').slice(0, 13),
+        alamat: teks(raw['Alamat']),
+        keterangan: teks(raw['Keterangan']),
+        anggota: [],
+      })
+      return
+    }
+
+    // Baris anggota — harus nempel ke kepala keluarga di atasnya.
+    if (groups.length === 0) {
+      errors.push(`Baris ${baris}: "${namaAnggota}" ditulis sebagai anggota, tapi belum ada baris kepala keluarga di atasnya.`)
+      return
+    }
+    const hubungan = teks(raw['Hubungan'])
+    const cocok = HUBUNGAN_LIST.find(h => h.toLowerCase() === hubungan.toLowerCase())
+    if (!cocok) {
+      errors.push(`Baris ${baris}: hubungan "${hubungan || '(kosong)'}" tidak dikenal — pilih salah satu dari ${HUBUNGAN_LIST.join(', ')}.`)
+      return
+    }
+    groups[groups.length - 1].anggota.push({ nama: namaAnggota, hubungan: cocok })
+  })
+
+  if (groups.length === 0 && errors.length === 0) {
+    errors.push('Tidak ada data terbaca. Pastikan nama kolomnya sama dengan template (kolom "Nama Kepala Keluarga" wajib ada).')
+  }
+
+  return { groups, errors }
 }
 
 export default function MustahikPage() {
@@ -135,6 +263,15 @@ export default function MustahikPage() {
   const [savingAnggota, setSavingAnggota] = useState(false)
   const [anggotaError, setAnggotaError] = useState('')
   const [exporting, setExporting] = useState(false)
+
+  // Import Excel
+  const [showImport, setShowImport] = useState(false)
+  const [importFileName, setImportFileName] = useState('')
+  const [importGroups, setImportGroups] = useState<ImportGroup[]>([])
+  const [importErrors, setImportErrors] = useState<string[]>([])
+  const [importParsing, setImportParsing] = useState(false)
+  const [importSaving, setImportSaving] = useState(false)
+  const [importError, setImportError] = useState('')
 
   async function fetchData() {
     setLoading(true)
@@ -278,6 +415,100 @@ export default function MustahikPage() {
     fetchAnggota(detailMustahik.id)
   }
 
+  function handleCloseImport() {
+    setShowImport(false)
+    setImportFileName('')
+    setImportGroups([])
+    setImportErrors([])
+    setImportError('')
+  }
+
+  async function handlePilihFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // reset, biar memilih file yang sama lagi tetap memicu onChange
+    if (!file) return
+
+    setImportParsing(true)
+    setImportError('')
+    setImportFileName(file.name)
+    try {
+      const hasil = await parseImportFile(file)
+      setImportGroups(hasil.groups)
+      setImportErrors(hasil.errors)
+    } catch {
+      setImportGroups([])
+      setImportErrors([])
+      setImportError('File tidak bisa dibaca. Pastikan formatnya .xlsx atau .xls.')
+    }
+    setImportParsing(false)
+  }
+
+  // Nama yang sudah ada di daftar — bukan error, cuma peringatan supaya amil
+  // tidak diam-diam bikin mustahik kembar karena meng-import file yang sama dua kali.
+  const importDuplikat = useMemo(() => {
+    const existing = new Set(data.map(m => m.nama.trim().toLowerCase()))
+    return new Set(importGroups.filter(g => existing.has(g.nama.toLowerCase())).map(g => g.baris))
+  }, [data, importGroups])
+
+  const importTotalJiwa = importGroups.reduce((n, g) => n + 1 + g.anggota.length, 0)
+
+  async function handleSimpanImport() {
+    if (importGroups.length === 0) return
+    setImportSaving(true)
+    setImportError('')
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profil } = await supabase
+      .from('profil_amil').select('lembaga_id').eq('id', user!.id).single()
+    const lembagaId = profil?.lembaga_id ?? null
+
+    const { data: mustahikBaru, error: errMustahik } = await supabase
+      .from('mustahik')
+      .insert(importGroups.map(g => ({
+        nama: g.nama,
+        golongan: g.golongan,
+        nomor_hp: g.nomor_hp || null,
+        alamat: g.alamat || null,
+        keterangan: g.keterangan || null,
+        lembaga_id: lembagaId,
+      })))
+      .select('id')
+
+    if (errMustahik || !mustahikBaru) {
+      setImportSaving(false)
+      setImportError(`Gagal menyimpan mustahik. ${errMustahik?.message ?? ''}`)
+      return
+    }
+
+    // Postgres mengembalikan baris INSERT ... RETURNING dalam urutan yang sama
+    // dengan urutan input, jadi hasilnya dipasangkan balik ke grup lewat index.
+    const anggotaRows = importGroups.flatMap((g, i) =>
+      g.anggota.map(a => ({
+        mustahik_id: mustahikBaru[i].id,
+        nama: a.nama,
+        hubungan: a.hubungan,
+        lembaga_id: lembagaId,
+      }))
+    )
+
+    if (anggotaRows.length > 0) {
+      const { error: errAnggota } = await supabase.from('anggota_keluarga_mustahik').insert(anggotaRows)
+      if (errAnggota) {
+        setImportSaving(false)
+        setImportError(
+          `${importGroups.length} kepala keluarga sudah tersimpan, tapi anggota keluarganya gagal (${errAnggota.message}). ` +
+          'Anggota bisa ditambahkan manual dari detail tiap mustahik — jangan meng-import ulang file ini supaya tidak kembar.'
+        )
+        fetchData()
+        return
+      }
+    }
+
+    setImportSaving(false)
+    handleCloseImport()
+    fetchData()
+  }
+
   const countPerGolongan = GOLONGAN_LIST.reduce((acc, g) => {
     acc[g.value] = data.filter(m => m.golongan === g.value).length
     return acc
@@ -328,6 +559,20 @@ export default function MustahikPage() {
                 {exporting ? 'Menyiapkan...' : '⬇ Export Excel'}
               </button>
             )}
+            <button
+              onClick={() => setShowImport(true)}
+              style={{
+                ...shared.btnSecondary,
+                width: isMobile ? '100%' : 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '10px 16px',
+                fontWeight: 600,
+              }}
+            >
+              ⬆ Import Excel
+            </button>
             <button onClick={() => setShowModal(true)} style={{
               ...shared.btnPrimary,
               width: isMobile ? '100%' : 'auto',
@@ -690,6 +935,151 @@ export default function MustahikPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Import Excel */}
+      {showImport && (
+        <div style={s.overlay} onClick={handleCloseImport}>
+          <div style={{
+            ...shared.card,
+            width: '100%',
+            maxWidth: isMobile ? '100%' : '640px',
+            margin: isMobile ? '0' : undefined,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+            maxHeight: '100vh',
+            overflow: 'hidden',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ ...shared.cardHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px', borderBottom: `1px solid ${colors.border}` }}>
+              <div>
+                <h2 style={{ ...shared.cardTitle, fontSize: font.lg, margin: 0 }}>Import Mustahik dari Excel</h2>
+                <p style={{ fontSize: font.sm, color: colors.textSubtle, marginTop: '4px' }}>
+                  Kepala keluarga beserta anggotanya sekaligus
+                </p>
+              </div>
+              <button onClick={handleCloseImport} style={s.closeBtn}>✕</button>
+            </div>
+
+            <div style={{ ...shared.modalBody, maxHeight: '70vh' }}>
+
+              {/* Langkah 1 — template */}
+              <div style={s.importStep}>
+                <p style={s.importStepLabel}>1. Unduh template</p>
+                <p style={s.importHint}>
+                  Satu baris = satu orang. Baris yang kolom <strong>Nama Kepala Keluarga</strong>-nya terisi
+                  membuka keluarga baru; baris di bawahnya yang kolom itu dibiarkan <strong>kosong</strong> dihitung
+                  sebagai anggota keluarga tersebut. File hasil Export Excel juga bisa dipakai langsung di sini.
+                </p>
+                <button onClick={downloadTemplateImport} style={{ ...shared.btnOutline, width: 'auto', padding: '8px 14px', fontSize: font.sm }}>
+                  ⬇ Unduh template-import-mustahik.xlsx
+                </button>
+              </div>
+
+              {/* Langkah 2 — pilih file */}
+              <div style={s.importStep}>
+                <p style={s.importStepLabel}>2. Pilih file yang sudah diisi</p>
+                <label style={s.importFileLabel}>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handlePilihFile}
+                    disabled={importParsing || importSaving}
+                    style={{ display: 'none' }}
+                  />
+                  <span style={{ ...shared.btnSecondary, display: 'inline-block', padding: '8px 14px', fontSize: font.sm, cursor: 'pointer' }}>
+                    {importParsing ? 'Membaca...' : 'Pilih file Excel'}
+                  </span>
+                  {importFileName && <span style={s.importFileName}>{importFileName}</span>}
+                </label>
+              </div>
+
+              {/* Langkah 3 — pratinjau */}
+              {(importGroups.length > 0 || importErrors.length > 0) && (
+                <div style={s.importStep}>
+                  <p style={s.importStepLabel}>3. Periksa hasil bacaan</p>
+
+                  {importGroups.length > 0 && (
+                    <p style={s.importSummary}>
+                      <strong>{importGroups.length}</strong> kepala keluarga · <strong>{importTotalJiwa}</strong> jiwa total
+                      {importDuplikat.size > 0 && (
+                        <span style={{ color: colors.gold }}> · {importDuplikat.size} nama sudah ada di daftar</span>
+                      )}
+                    </p>
+                  )}
+
+                  {importErrors.length > 0 && (
+                    <div style={s.importErrorBox}>
+                      <p style={s.importErrorTitle}>⚠ {importErrors.length} baris dilewati:</p>
+                      {importErrors.map((msg, i) => (
+                        <p key={i} style={s.importErrorItem}>{msg}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {importGroups.length > 0 && (
+                    <div style={s.importPreviewList}>
+                      {importGroups.map(g => {
+                        const warna = GOLONGAN_COLOR[g.golongan]
+                        return (
+                          <div key={g.baris} style={{
+                            ...s.importPreviewCard,
+                            border: importDuplikat.has(g.baris)
+                              ? `1px solid ${colors.gold}`
+                              : `1px solid ${colors.borderLight}`,
+                          }}>
+                            <div style={s.importPreviewHead}>
+                              <span style={s.namaText}>{g.nama}</span>
+                              <span style={{ ...s.golonganBadge, background: warna.bg, color: warna.color }}>{g.golongan}</span>
+                              {importDuplikat.has(g.baris) && <span style={s.importDupBadge}>nama sudah ada</span>}
+                            </div>
+                            {(g.nomor_hp || g.alamat) && (
+                              <p style={s.importPreviewMeta}>
+                                {[g.nomor_hp, g.alamat].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                            {g.anggota.length === 0 ? (
+                              <p style={s.importPreviewAnggotaKosong}>Tanpa anggota keluarga</p>
+                            ) : (
+                              <p style={s.importPreviewAnggota}>
+                                +{g.anggota.length} anggota: {g.anggota.map(a => `${a.nama} (${a.hubungan})`).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {importError && <p style={s.errorText}>⚠ {importError}</p>}
+            </div>
+
+            <div style={{
+              ...shared.modalFooter,
+              flexDirection: isMobile ? 'column-reverse' : 'row',
+            }}>
+              <button onClick={handleCloseImport} style={{
+                ...shared.btnOutline,
+                width: isMobile ? '100%' : 'auto',
+              }}>Batal</button>
+              <button
+                onClick={handleSimpanImport}
+                disabled={importGroups.length === 0 || importSaving}
+                style={{
+                  ...shared.btnPrimary,
+                  width: isMobile ? '100%' : 'auto',
+                  ...(importGroups.length === 0 || importSaving ? shared.btnDisabled : {}),
+                }}
+              >
+                {importSaving
+                  ? 'Menyimpan...'
+                  : importGroups.length > 0
+                    ? `Simpan ${importGroups.length} Keluarga`
+                    : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -711,6 +1101,24 @@ const s: Record<string, React.CSSProperties> = {
     background: colors.primaryLight, border: `1px solid ${colors.primary}`, borderRadius: '6px',
     cursor: 'pointer', fontFamily: font.family, whiteSpace: 'nowrap',
   },
+
+  /* Import Excel */
+  importStep: { paddingBottom: '18px', marginBottom: '18px', borderBottom: `1px solid ${colors.borderLight}` },
+  importStepLabel: { fontSize: font.sm, fontWeight: 700, color: colors.text, marginBottom: '6px' },
+  importHint: { fontSize: font.xs, color: colors.textSubtle, lineHeight: 1.6, marginBottom: '10px' },
+  importFileLabel: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' },
+  importFileName: { fontSize: font.xs, color: colors.textSubtle, wordBreak: 'break-all' },
+  importSummary: { fontSize: font.sm, color: colors.text, marginBottom: '10px' },
+  importErrorBox: { background: colors.dangerBg, border: `1px solid ${colors.danger}`, borderRadius: radius.md, padding: '10px 12px', marginBottom: '12px' },
+  importErrorTitle: { fontSize: font.xs, fontWeight: 700, color: colors.danger, marginBottom: '4px' },
+  importErrorItem: { fontSize: font.xs, color: colors.danger, lineHeight: 1.6 },
+  importPreviewList: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' },
+  importPreviewCard: { background: colors.surface, borderRadius: radius.md, padding: '10px 12px' },
+  importPreviewHead: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+  importPreviewMeta: { fontSize: font.xs, color: colors.textSubtle, marginTop: '4px' },
+  importPreviewAnggota: { fontSize: font.xs, color: colors.primaryDark, marginTop: '4px', lineHeight: 1.6 },
+  importPreviewAnggotaKosong: { fontSize: font.xs, color: colors.textDisabled, marginTop: '4px' },
+  importDupBadge: { fontSize: '10px', fontWeight: 700, color: colors.gold, background: colors.goldBg, padding: '2px 8px', borderRadius: radius.full },
 
   /* Mobile card list */
   mobileListContainer: { display: 'flex', flexDirection: 'column', gap: '10px' },

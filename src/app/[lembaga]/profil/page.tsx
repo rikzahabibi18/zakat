@@ -10,6 +10,7 @@ import { colors, font } from '@/styles/tokens'
 interface ProfilForm {
   nama: string
   email: string
+  passwordLama: string
   passwordBaru: string
   konfirmasiPassword: string
 }
@@ -34,7 +35,7 @@ export default function ProfilPage() {
   const isMobile = useIsMobile()
 
   const [form, setForm] = useState<ProfilForm>({
-    nama: '', email: '', passwordBaru: '', konfirmasiPassword: '',
+    nama: '', email: '', passwordLama: '', passwordBaru: '', konfirmasiPassword: '',
   })
   const [lembagaForm, setLembagaForm] = useState<LembagaForm>({
     nama: '', alamat: '', satuan_beras: 'kg', zakat_fitrah_kg: 2.5, harga_beras_per_kg: 18000,
@@ -120,6 +121,7 @@ export default function ProfilPage() {
   }
 
   async function handleSavePassword() {
+    if (!form.passwordLama) { setErrorPassword('Masukkan kata sandi saat ini.'); return }
     if (!form.passwordBaru) { setErrorPassword('Masukkan kata sandi baru.'); return }
     if (form.passwordBaru.length < 6) { setErrorPassword('Kata sandi minimal 6 karakter.'); return }
     if (form.passwordBaru !== form.konfirmasiPassword) {
@@ -130,14 +132,28 @@ export default function ProfilPage() {
     setErrorPassword('')
     setSuccessPassword('')
 
+    // Verifikasi kata sandi lama dulu (re-autentikasi) sebelum benar-benar
+    // ganti password -- tanpa ini, siapa pun yang kebetulan pegang tab yang
+    // lagi login (komputer bersama, sesi lupa logout) bisa ambil alih akun
+    // cuma dengan ganti password, tanpa perlu tahu password lamanya.
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: form.email,
+      password: form.passwordLama,
+    })
+    if (authError) {
+      setSavingPassword(false)
+      setErrorPassword('Kata sandi saat ini salah.')
+      return
+    }
+
     const { error } = await supabase.auth.updateUser({
       password: form.passwordBaru
     })
 
     setSavingPassword(false)
-    if (error) { setErrorPassword('Gagal mengubah kata sandi. Coba lagi.'); return }
+    if (error) { setErrorPassword(error.message || 'Gagal mengubah kata sandi. Coba lagi.'); return }
     setSuccessPassword('Kata sandi berhasil diubah.')
-    setForm(f => ({ ...f, passwordBaru: '', konfirmasiPassword: '' }))
+    setForm(f => ({ ...f, passwordLama: '', passwordBaru: '', konfirmasiPassword: '' }))
   }
 
   async function handleSaveLembaga() {
@@ -609,6 +625,16 @@ export default function ProfilPage() {
                 <p style={shared.cardSub}>Gunakan kata sandi yang kuat dan mudah diingat</p>
               </div>
               <div style={{ ...shared.cardBody, padding: isMobile ? '0 16px 16px' : '0 24px 24px' }}>
+                <div style={shared.field}>
+                  <label style={shared.label}>Kata Sandi Saat Ini</label>
+                  <input
+                    type="password"
+                    placeholder="Kata sandi yang dipakai untuk masuk"
+                    value={form.passwordLama}
+                    onChange={e => setForm(f => ({ ...f, passwordLama: e.target.value }))}
+                    style={{ ...shared.input, fontSize: isMobile ? font.lg : font.md }}
+                  />
+                </div>
                 <div style={shared.field}>
                   <label style={shared.label}>Kata Sandi Baru</label>
                   <input

@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import * as XLSX from 'xlsx'
+import { unduhExcel } from '@/utils/excel'
 import { createClient } from '@/utils/supabase/client'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Sidebar from '@/components/Sidebar'
@@ -77,6 +77,7 @@ function formatTanggal(iso: string) {
 
 function exportToExcel(data: Transaksi[], satuanBeras: 'kg' | 'liter') {
   const labelSatuan = satuanBeras === 'kg' ? 'Kg' : 'Liter'
+  const headerBeras = `Jumlah Beras (${labelSatuan})`
   const rows = data.map((t, i) => ({
     'No': i + 1,
     'Waktu': formatTanggal(t.tanggal),
@@ -84,16 +85,25 @@ function exportToExcel(data: Transaksi[], satuanBeras: 'kg' | 'liter') {
     'Kategori': normKategori(t.kategori_zakat?.nama_kategori),
     'Metode': t.metode_pembayaran,
     'Jumlah Uang (Rp)': t.jumlah_uang > 0 ? t.jumlah_uang : '',
-    [`Jumlah Beras (${labelSatuan})`]: t.jumlah_beras > 0 ? Math.round(tampilBeras(t.jumlah_beras, satuanBeras) * 100) / 100 : '',
+    [headerBeras]: t.jumlah_beras > 0 ? Math.round(tampilBeras(t.jumlah_beras, satuanBeras) * 100) / 100 : '',
     'Dicatat Oleh': t.amil_pencatat ?? '—',
   }))
 
-  const ws = XLSX.utils.json_to_sheet(rows)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Transaksi')
-  ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 22 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 25 }]
   const tanggal = new Date().toLocaleDateString('id-ID').replace(/\//g, '-')
-  XLSX.writeFile(wb, `transaksi-zakat-${tanggal}.xlsx`)
+  return unduhExcel(`transaksi-zakat-${tanggal}.xlsx`, [{
+    nama: 'Transaksi',
+    kolom: [
+      { header: 'No', width: 5 },
+      { header: 'Waktu', width: 20 },
+      { header: 'Muzakki', width: 25 },
+      { header: 'Kategori', width: 22 },
+      { header: 'Metode', width: 15 },
+      { header: 'Jumlah Uang (Rp)', width: 18 },
+      { header: headerBeras, width: 18 },
+      { header: 'Dicatat Oleh', width: 25 },
+    ],
+    baris: rows,
+  }])
 }
 
 export default function TransaksiPage() {

@@ -3,8 +3,14 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { SUPER_ADMIN_EMAIL } from '@/utils/supabase/superAdmin'
 
-const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // tanpa 0/O/1/I/L, gampang dibaca manusia
-function generateKode(len = 16) {
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // tanpa 0/O/1/I, gampang dibaca manusia
+// Panjang 8 = 32^8 (~1,1 triliun kombinasi) -- diturunkan dari 16 (2026-09-30)
+// karena kode ini sering harus dibacakan/diketik manual oleh amil yang belum
+// tentu terbiasa nyalin kode acak panjang. Endpoint /api/registrasi/validate-kode
+// belum punya rate limit, jadi JANGAN turunkan lagi tanpa nambah itu dulu --
+// di 8 karakter perkiraan waktu tebak brute-force ~19 tahun di skala lembaga
+// sekarang, ~254 hari di skala 1000 lembaga (asumsi 50 request/detik).
+function generateKode(len = 8) {
   return Array.from({ length: len }, () => ALPHABET[randomInt(ALPHABET.length)]).join('')
 }
 
