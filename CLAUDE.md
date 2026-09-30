@@ -27,6 +27,7 @@
 | Deployment | Vercel |
 | Dev OS | Windows |
 | PDF | jsPDF |
+| Excel | `exceljs` — semua baca/tulis lewat `src/utils/excel.ts` (lihat "Excel" di bawah) |
 | Linting | ESLint 9, flat config (`eslint.config.mjs`), `eslint-config-next` |
 
 ---
@@ -124,6 +125,16 @@ utils/
 - Ini pengecualian dari prinsip "duplikasi antar halaman" yang berlaku di bagian lain codebase — layak di-share karena isinya benar-benar identik di semua tempat dan tidak ada alasan bisnis buat beda per halaman (beda dengan `formatTanggal` dkk yang sengaja diduplikasi karena berpotensi butuh nuansa per halaman).
 - Breakpoint: `window.innerWidth <= 768` → mobile (konsisten di satu tempat sekarang, defaultnya `breakpoint = 768` tapi bisa di-override lewat argumen).
 - Kalau nemu logic serupa (identik persis, tanpa variasi bisnis) di banyak tempat, pertimbangkan pola yang sama: tarik ke `hooks/` bukan diduplikasi lagi.
+
+### Excel (`src/utils/excel.ts`)
+- **Semua** baca/tulis Excel lewat `unduhExcel()` dan `bacaExcel()` di `src/utils/excel.ts` — jangan panggil library-nya langsung dari halaman. Pemakainya sekarang: export transaksi, export + template import + parser mustahik, export sebaran sesi distribusi.
+- Dipusatkan (bukan diduplikasi per halaman seperti `formatTanggal`) dengan alasan yang sama seperti `useIsMobile`: isinya murni plumbing format file, nol nuansa bisnis, dan justru penting supaya semua file yang keluar dari sistem ini tampilannya seragam.
+- `unduhExcel(namaFile, sheets)` minta `kolom: { header, width }[]` **berpasangan eksplisit**. Ini disengaja: pola lama (`xlsx` + array `!cols` posisional) pernah bikin lebar kolom tidak sejajar headernya tanpa ada error — nambah satu kolom langsung menggeser semuanya diam-diam.
+- **JANGAN balik ke `xlsx` (SheetJS npm).** Dua alasan, dua-duanya sudah diuji empiris (2026-09-30):
+  1. Paket `xlsx` di npm itu Community Edition — writer-nya **membuang properti style tanpa error**. Border/bold/warna latar cuma ada di SheetJS Pro (berbayar). Kodenya bisa lolos tsc & eslint tapi hasilnya polos.
+  2. `xlsx@0.18.5` (versi terakhir & selamanya di npm — SheetJS pindah ke CDN sendiri) kena prototype pollution + ReDoS dengan **`fixAvailable: false`**. Dulu tidak penting karena app ini cuma *menulis* file; sejak ada import mustahik, jalur parser itu bisa dijangkau file dari user.
+- `exceljs` sendiri muncul di `npm audit` sebagai moderate, tapi hanya transitif lewat `uuid` dan **tidak terjangkau**: exceljs cuma memanggil `uuidv4()` tanpa argumen di satu file conditional-formatting yang tidak dipakai, sementara advisory-nya soal `v3`/`v5`/`v6` dengan argumen `buf`. Saran `npm audit fix` di sini justru **downgrade** ke exceljs 3.4.0 — jangan diikuti.
+- Warna garis tabel pakai `colors.textPlaceholder`, **bukan** `colors.border`. `colors.border` (`#EDE8E0`) pas untuk layar tapi terlalu pucat sebagai garis tabel yang ikut tercetak — contoh kasus "jangan paksa ke token terdekat" di bagian Design System.
 
 ### Pola Umum
 
@@ -324,4 +335,4 @@ useEffect(() => { fetchData(); }, []);
 
 ---
 
-*Last updated: 2026-09-27 — QRIS diganti gambar statis yang di-upload amil (Supabase Storage bucket `qris`), dan `transaksi.status` sekarang menentukan apakah dana dihitung; lihat "Status Pembayaran Transaksi" di atas. Sebelumnya (2026-09-26): URL tenant-scoped `/[lembaga]/...`.*
+*Last updated: 2026-09-30 — import mustahik dari Excel (termasuk anggota keluarga), dan `xlsx` diganti `exceljs` lewat `src/utils/excel.ts`; lihat "Excel" di atas. Sebelumnya (2026-09-27): QRIS diganti gambar statis yang di-upload amil (Supabase Storage bucket `qris`), dan `transaksi.status` sekarang menentukan apakah dana dihitung. Sebelumnya (2026-09-26): URL tenant-scoped `/[lembaga]/...`.*

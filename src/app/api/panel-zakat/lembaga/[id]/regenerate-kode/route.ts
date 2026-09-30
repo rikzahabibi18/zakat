@@ -4,7 +4,9 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { SUPER_ADMIN_EMAIL } from '@/utils/supabase/superAdmin'
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-function generateKode(len = 16) {
+// Panjang 8 = 32^8 (~1,1 triliun kombinasi) -- diturunkan dari 16 (2026-09-30),
+// lihat komentar di api/panel-zakat/lembaga/route.ts buat alasan lengkapnya.
+function generateKode(len = 8) {
   return Array.from({ length: len }, () => ALPHABET[randomInt(ALPHABET.length)]).join('')
 }
 

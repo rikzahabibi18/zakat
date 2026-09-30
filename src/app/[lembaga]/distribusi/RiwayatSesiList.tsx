@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import * as XLSX from 'xlsx'
+import { unduhExcel } from '@/utils/excel'
 import { createClient } from '@/utils/supabase/client'
 import { shared } from '@/styles/shared'
 import { colors, font, radius } from '@/styles/tokens'
@@ -52,12 +52,21 @@ export default function RiwayatSesiList({ isMobile, supabase, sesiList, loadingS
       lastMustahikId = p.mustahik_id
     })
 
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Sebaran')
-    ws['!cols'] = [{ wch: 5 }, { wch: 25 }, { wch: 25 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 16 }]
     const tanggalFile = new Date(sesi.tanggal).toLocaleDateString('id-ID').replace(/\//g, '-')
-    XLSX.writeFile(wb, `distribusi-${sesi.jenis.replace(/\s+/g, '-').toLowerCase()}-${tanggalFile}.xlsx`)
+    await unduhExcel(`distribusi-${sesi.jenis.replace(/\s+/g, '-').toLowerCase()}-${tanggalFile}.xlsx`, [{
+      nama: 'Sebaran',
+      kolom: [
+        { header: 'No', width: 5 },
+        { header: 'Nama Kepala Keluarga', width: 25 },
+        { header: 'Nama Penerima', width: 25 },
+        { header: 'Hubungan', width: 16 },
+        { header: 'Jumlah Uang (Rp)', width: 16 },
+        { header: `Jumlah Beras (${labelSatuan})`, width: 16 },
+        { header: 'Jenis', width: 14 },
+        { header: 'Tanggal Sesi', width: 16 },
+      ],
+      baris: rows,
+    }])
 
     setExportingId(null)
   }

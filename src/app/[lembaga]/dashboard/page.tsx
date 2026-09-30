@@ -61,6 +61,7 @@ export default function DashboardPage() {
   const [userNama, setUserNama] = useState('')
   const isMobile = useIsMobile()
   const [satuanBeras, setSatuanBeras] = useState<'kg' | 'liter'>('kg')
+  const [namaLembaga, setNamaLembaga] = useState('')
 
   useEffect(() => {
     async function fetchData() {
@@ -71,8 +72,9 @@ export default function DashboardPage() {
       if (user) {
         const { data: profil } = await supabase.from('profil_amil').select('lembaga_id').eq('id', user.id).single()
         if (profil?.lembaga_id) {
-          const { data: lembaga } = await supabase.from('lembaga').select('satuan_beras').eq('id', profil.lembaga_id).single()
+          const { data: lembaga } = await supabase.from('lembaga').select('nama, satuan_beras').eq('id', profil.lembaga_id).single()
           if (lembaga?.satuan_beras) setSatuanBeras(lembaga.satuan_beras as 'kg' | 'liter')
+          if (lembaga?.nama) setNamaLembaga(lembaga.nama)
         }
       }
 
@@ -173,7 +175,9 @@ export default function DashboardPage() {
         }}>
           <div style={s.headerTextWrap}>
             <p style={s.headerEyebrow}>{today}</p>
-            <h1 style={{ ...shared.headerTitle, fontSize: isMobile ? font.h2 : font.h1 }}>Dashboard</h1>
+            <h1 style={{ ...shared.headerTitle, fontSize: isMobile ? font.h2 : font.h1 }}>
+              Dashboard ZIS {namaLembaga ? ` ${namaLembaga}` : ''}
+            </h1>
           </div>
           <div style={s.headerUser}>
             <div style={s.avatar}>{avatarLetter}</div>
