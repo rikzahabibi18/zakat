@@ -86,13 +86,15 @@ function ZakatMalContent() {
         const json = await res.json()
         if (!json.success || !Array.isArray(json.data)) throw new Error('Format response tidak sesuai')
         const entry = json.data.find(
-          (d: { material: string; materialType: string; weight: number; sellPrice: number }) =>
-            d.material === 'gold' && d.materialType === 'Emas Batangan' &&
-            d.weight === 1 && d.sellPrice > 0
+          (d: { source: string; material: string; weight: number; weightUnit: string; sellPrice: number; currency: string }) =>
+            d.source === 'pegadaian' && d.material === 'gold' && d.currency === 'IDR' &&
+            ['gram', 'gr', 'g'].includes(d.weightUnit) &&
+            Number.isFinite(d.weight) && d.weight > 0 && Number.isFinite(d.sellPrice) && d.sellPrice > 0
         )
-        if (!entry) throw new Error('Data emas 1 gram tidak ditemukan')
-        const hargaPerGram: number = entry.sellPrice
-        setGold({ hargaPerGram, nisab: hargaPerGram * 85, sumber: entry.displayName ?? 'Logam Mulia', tanggal: entry.recordedDate ?? '', loading: false, error: '' })
+        if (!entry) throw new Error('Data harga emas Pegadaian tidak ditemukan')
+        // Pegadaian mengirim harga per bobot produk (saat ini 0,01 gram).
+        const hargaPerGram: number = entry.sellPrice / entry.weight
+        setGold({ hargaPerGram, nisab: hargaPerGram * 85, sumber: entry.displayName ?? 'Pegadaian', tanggal: entry.recordedDate ?? '', loading: false, error: '' })
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Gagal mengambil data'
         setGold(g => ({ ...g, loading: false, error: `Gagal mengambil harga emas: ${msg}` }))
